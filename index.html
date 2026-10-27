@@ -8756,6 +8756,9 @@ function AIAnalysisSection({ result, char, type, tm, wide }) {
         </div>
       </>)}
 
+      {state.status === "done" && state.model && (
+        <p className="f-mono text-[11px] inline-flex items-center gap-1.5" style={{ color: "var(--green)" }}><Icon name="cpu" size={12} />วิเคราะห์โดยโมเดล: {state.model}{state.at ? " · " + new Date(state.at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : ""}</p>
+      )}
       <p className="text-[11px] leading-relaxed" style={{ color: "var(--dim)", opacity: 0.8 }}>ความเป็นส่วนตัว: ส่งให้ AI เฉพาะคะแนนและพฤติกรรมการเล่น ไม่ส่งชื่อ รหัสนักศึกษา เพศ หรืออายุ</p>
     </motion.section>
   );
