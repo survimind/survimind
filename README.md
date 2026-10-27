@@ -1,16 +1,25 @@
-## Hi there 👋
+# SurviMind · Zombie School MBTI Survival
 
-<!--
-**survimind/survimind** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+เกม visual novel เอาตัวรอดจากซอมบี้ ที่วิเคราะห์บุคลิกภาพ (MBTI) และทักษะสมอง (Executive Functions) จากการตัดสินใจจริงของผู้เล่น
+เพื่อแนะนำกลยุทธ์การเรียน การจัดการความเครียด และบทบาทในงานกลุ่มสำหรับนักศึกษามหาวิทยาลัย
 
-Here are some ideas to get you started:
+โปรเจกต์สำหรับ Project Pitching USC10967 · Track 1: Education, Campus Life & Productivity
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+---
+
+## ⚠️ กฎการแก้ไฟล์ (อ่านก่อนแก้ทุกครั้ง)
+
+**ไฟล์ต้นฉบับคือ `index.html` ใน repository นี้**
+
+1. ทุกครั้งที่จะแก้ ให้เริ่มจากไฟล์ล่าสุดบน GitHub เสมอ
+2. แก้เสร็จแล้วส่งขึ้น GitHub ก่อน แล้วค่อยอัปเดตลิงก์บน Claude จากไฟล์เดียวกัน
+3. **ห้าม**แก้จากเว็บบน Claude ตัวเก่าแล้วอัปโหลดทับ งานที่แก้บน GitHub จะหาย
+
+---
+
+## ไฟล์ในโปรเจกต์
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `index.html` | ตัวเว็บทั้งหมด (เกม เสียง ภาพ ผลลัพธ์ แดชบอร์ดผู้สอน) อยู่ในไฟล์เดียว |
+| `README.md` | คำอธิบายโปรเจกต์และกฎการแก้ไฟล์ |
