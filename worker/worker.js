@@ -16,7 +16,7 @@
 
 const DEFAULT_ORIGINS = "https://survimind.github.io";
 const DEFAULT_MODELS = "gemini-3.5-flash-lite,gemini-3.8-flash";
-const MAX_BODY = 24000;
+const MAX_BODY = 90000;
 
 const SYSTEM = `คุณเป็นโค้ชการเรียนสำหรับนักศึกษามหาวิทยาลัยไทย
 คุณจะได้รับข้อมูลพฤติกรรมจากเกมจำลองสถานการณ์วิกฤต (เอาตัวรอดจากซอมบี้ หรือหลงป่า)
@@ -70,38 +70,100 @@ export default {
     try { body = JSON.parse(raw); } catch { return json({ ok: false, error: "bad_json" }, 400, cors); }
     const player = sanitize(body && body.player);
     if (!player) return json({ ok: false, error: "bad_payload" }, 400, cors);
-
-    const prompt = "ข้อมูลการเล่นของผู้เล่น (JSON):\n" + JSON.stringify(player) + "\n\n" + SCHEMA_HINT;
     const models = (env.GEMINI_MODELS || DEFAULT_MODELS).split(",").map((s) => s.trim()).filter(Boolean);
 
-    let lastError = "ai_unavailable", lastStatus = 502;
-    for (const model of models) {
-      let r;
-      try {
-        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: SYSTEM }] },
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: "application/json", temperature: 0.6, maxOutputTokens: 8192 },
-          }),
-        });
-      } catch {
-        lastError = "network"; continue;
-      }
-      if (r.status === 429) { lastError = "rate_limited"; lastStatus = 429; continue; }
-      if (!r.ok) { lastError = "ai_error_" + r.status; continue; }
-      const out = await r.json().catch(() => null);
-      const text = ((out && out.candidates && out.candidates[0] && out.candidates[0].content && out.candidates[0].content.parts) || [])
-        .map((p) => (p && !p.thought && p.text) || "").join("");
-      const report = parseReport(text);
-      if (!report) { lastError = "bad_ai_output"; continue; }
-      return json({ ok: true, model, report }, 200, cors);
+    // ---- โหมด AI Coach: แชตถามต่อ ----
+    if (body.mode === "coach") {
+      const messages = sanitizeMessages(body.messages);
+      if (!messages) return json({ ok: false, error: "bad_messages" }, 400, cors);
+      if (messages.filter((m) => m.role === "user").length > COACH_LIMIT) return json({ ok: false, error: "limit_reached" }, 429, cors);
+      const context = "ข้อมูลการเล่นของผู้เล่น (JSON):\n" + JSON.stringify(player) +
+        "\n\nรายงาน AI ที่ผู้เล่นได้รับแล้ว (JSON):\n" + JSON.stringify(sanitizeReport(body.report));
+      const res = await callGemini(env, models, {
+        systemInstruction: { parts: [{ text: COACH_SYSTEM + "\n\n" + context }] },
+        contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.text }] })),
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+      }, (text) => { const t = String(text || "").trim(); return t ? t.slice(0, 2500) : null; });
+      if (!res.ok) return json({ ok: false, error: res.error }, res.status, cors);
+      return json({ ok: true, model: res.model, reply: res.value }, 200, cors);
     }
-    return json({ ok: false, error: lastError }, lastStatus, cors);
+
+    // ---- โหมดวิเคราะห์ผล (ค่าเริ่มต้น) ----
+    const prompt = "ข้อมูลการเล่นของผู้เล่น (JSON):\n" + JSON.stringify(player) + "\n\n" + SCHEMA_HINT;
+    const res = await callGemini(env, models, {
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", temperature: 0.6, maxOutputTokens: 8192 },
+    }, parseReport);
+    if (!res.ok) return json({ ok: false, error: res.error }, res.status, cors);
+    return json({ ok: true, model: res.model, report: res.value }, 200, cors);
   },
 };
+
+// เรียก Gemini ตามลำดับโมเดล ถ้าตัวแรกเต็มหรือผิดพลาดจะลองตัวถัดไป
+async function callGemini(env, models, payload, parse) {
+  let error = "ai_unavailable", status = 502;
+  for (const model of models) {
+    let r;
+    try {
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      error = "network"; continue;
+    }
+    if (r.status === 429) { error = "rate_limited"; status = 429; continue; }
+    if (!r.ok) { error = "ai_error_" + r.status; continue; }
+    const out = await r.json().catch(() => null);
+    const text = ((out && out.candidates && out.candidates[0] && out.candidates[0].content && out.candidates[0].content.parts) || [])
+      .map((p) => (p && !p.thought && p.text) || "").join("");
+    const value = parse(text);
+    if (!value) { error = "bad_ai_output"; continue; }
+    return { ok: true, model, value };
+  }
+  return { ok: false, error, status };
+}
+
+const COACH_LIMIT = 10;
+
+const COACH_SYSTEM = `คุณคือ "AI Coach" โค้ชการเรียนสำหรับนักศึกษามหาวิทยาลัยไทย ในเว็บเกม SurviMind
+ผู้เล่นเพิ่งเล่นเกมจำลองสถานการณ์วิกฤตจบ และอ่านรายงานวิเคราะห์ของตัวเองแล้ว ตอนนี้เขาถามคำถามต่อ
+
+กฎ:
+1. ตอบโดยอิงข้อมูลการเล่นและรายงานของผู้เล่นคนนี้ (บุคลิก MBTI, คะแนน EF, พฤติกรรมการตัดสินใจ) อ้างข้อมูลจริงอย่างน้อย 1 จุดเมื่อเกี่ยวข้อง
+2. ตอบเฉพาะเรื่องการเรียน การอ่านหนังสือสอบ การจัดการเวลา การทำงานกลุ่ม การจัดการความเครียด และชีวิตในมหาวิทยาลัย ถ้าถามเรื่องอื่น ให้ตอบสุภาพสั้น ๆ ว่าช่วยได้เฉพาะเรื่องเหล่านี้ แล้วเสนอหัวข้อที่ถามได้
+3. ห้ามวินิจฉัยโรค ภาวะทางจิตใจ หรือบุคลิกภาพผิดปกติ ใช้คำว่า "แนวโน้ม" หรือ "รูปแบบ"
+4. ถ้าผู้เล่นพูดถึงความรู้สึกหมดหวัง อยากทำร้ายตัวเอง หรือไม่อยากมีชีวิตอยู่ ให้ตอบด้วยความเห็นใจ ไม่ตัดสิน บอกว่าเขาไม่ได้อยู่คนเดียว และแนะนำให้โทรสายด่วนสุขภาพจิต 1323 (ตลอด 24 ชั่วโมง) หรือคุยกับศูนย์ให้คำปรึกษาของมหาวิทยาลัย หรือคนที่ไว้ใจทันที ไม่ต้องให้คำแนะนำเรื่องการเรียนในคำตอบนั้น
+5. ห้ามขอข้อมูลส่วนตัว เช่น ชื่อจริง รหัสนักศึกษา เบอร์โทร ถ้าผู้เล่นพิมพ์มาเอง ห้ามทวนซ้ำ
+6. ใช้ภาษาไทยเป็นกันเอง ให้กำลังใจ เรียกผู้เล่นว่า "คุณ"
+7. ตอบกระชับ ไม่เกินประมาณ 150 คำ ให้ขั้นตอนที่ทำได้จริง ถ้าเป็นแผนให้ใช้ข้อ 1. 2. 3. ขึ้นบรรทัดใหม่
+8. ตอบเป็นข้อความธรรมดา ห้ามใช้ markdown เช่น ** หรือ #`;
+
+function sanitizeMessages(list) {
+  if (!Array.isArray(list) || !list.length || list.length > COACH_LIMIT * 2 + 1) return null;
+  const out = [];
+  for (const m of list) {
+    if (!m || (m.role !== "user" && m.role !== "assistant") || typeof m.text !== "string" || !m.text.trim()) return null;
+    out.push({ role: m.role, text: m.text.trim().slice(0, m.role === "user" ? 500 : 2500) });
+  }
+  if (out[out.length - 1].role !== "user") return null;
+  return out;
+}
+
+function sanitizeReport(r) {
+  if (!r || typeof r !== "object") return {};
+  const s = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+  return {
+    summary: s(r.summary, 800),
+    strengths: strList(r.strengths, 4, 300),
+    growth_areas: strList(r.growth_areas, 4, 300),
+    study_strategies: strList(r.study_strategies, 5, 300),
+    stress_tips: strList(r.stress_tips, 4, 300),
+    group_work_role: s(r.group_work_role, 400),
+  };
+}
 
 function json(obj, status, headers) {
   return new Response(JSON.stringify(obj), { status, headers: { ...headers, "Content-Type": "application/json; charset=utf-8" } });
