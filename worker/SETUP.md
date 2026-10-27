@@ -67,3 +67,19 @@
 2. กด **Edit code** (ไอคอน `</>` มุมขวาบน)
 3. ลบโค้ดเดิมทั้งหมด วางโค้ดล่าสุดจาก `worker/worker.js` แล้วกด **Deploy**
 4. ไม่ต้องใส่ API key ใหม่ key เดิมยังอยู่
+
+## ให้ Worker อัปเดตเองอัตโนมัติจาก GitHub (ทำครั้งเดียว)
+
+หลังตั้งค่านี้ ทุกครั้งที่ไฟล์ใน `worker/` บน GitHub เปลี่ยน Cloudflare จะ deploy ให้เอง ไม่ต้องคัดลอกโค้ดอีก
+
+1. Cloudflare → **Compute** → **Workers & Pages** → กด **survimind-ai**
+2. แท็บ **Settings** → หัวข้อ **Build** → กด **Connect** ที่ **Git repository**
+3. เลือก **GitHub** แล้วอนุญาตให้ Cloudflare เข้าถึง repository `survimind/survimind`
+4. ตั้งค่าดังนี้
+   - Branch: `main`
+   - Root directory (Path): `/worker`
+   - Build command: เว้นว่าง
+   - Deploy command: `npx wrangler deploy`
+5. กด **Connect** แล้วรอ build แรกเสร็จ (เครื่องหมายถูกสีเขียว)
+
+API key ไม่หาย เพราะเก็บเป็น Secret ใน Cloudflare แยกจากโค้ด

@@ -1,0 +1,9 @@
+// ตั้งค่า Cloudflare Worker (ใช้กับการ deploy อัตโนมัติจาก GitHub)
+// ห้ามเปลี่ยน name ต้องตรงกับชื่อ Worker ใน Cloudflare
+{
+  "name": "survimind-ai",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01",
+  // เก็บตัวแปรที่ตั้งไว้ในหน้า Cloudflare ไว้ ไม่ลบทิ้งตอน deploy (API key เป็น Secret ไม่ถูกลบอยู่แล้ว)
+  "keep_vars": true
+}
