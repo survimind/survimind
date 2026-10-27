@@ -5,7 +5,7 @@
   - แก้เสร็จแล้วส่งขึ้น GitHub ก่อน แล้วค่อยอัปเดตลิงก์บน Claude จากไฟล์เดียวกัน
   - ห้ามแก้จากเว็บบน Claude ตัวเก่าแล้วอัปโหลดทับ งานบน GitHub จะหาย
 --><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Zombie School MBTI Survival</title>
+<title>SURVIMIND</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -4041,6 +4041,159 @@ function useDetectedDevice() {
 }
 
 /* ========================= Screen: Title ========================= */
+/* ========================= Screen: Splash · SURVIMIND (อินโทรแบบภาพยนตร์ ~6 วินาที) =========================
+   สัญญาณกล้องวงจรปิด → เส้นชีพจร → ชื่อเกมกะพริบประกอบตัว → คำโปรย → ปุ่มเริ่มเล่น
+   ทำด้วย CSS/Canvas ทั้งหมด ไม่ใช้ไฟล์วิดีโอ (เว็บไม่หนัก) · กด "ข้ามอินโทร" ได้ตลอด
+   เสียงจะดังเฉพาะเมื่อเบราว์เซอร์อนุญาต (บางเครื่องต้องกดก่อน) */
+const SPLASH_READY_MS = 5600;
+const SPLASH_TITLE = "SURVIMIND";
+const SPLASH_CSS = `
+.sv-root{position:relative;height:100%;width:100%;overflow:hidden;background:#050605;color:var(--bone);isolation:isolate}
+.sv-noise{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;opacity:.06;mix-blend-mode:screen;pointer-events:none;z-index:1}
+.sv-in .sv-noise{animation:sv-noise 2.6s ease-out both}
+@keyframes sv-noise{0%{opacity:.5}10%{opacity:.14}14%{opacity:.42}24%{opacity:.16}40%{opacity:.1}100%{opacity:.06}}
+.sv-fog{position:absolute;width:70vmax;height:70vmax;border-radius:50%;filter:blur(60px);pointer-events:none;z-index:0;opacity:0;animation:sv-fogin 3s ease-out 1s forwards, sv-drift 22s ease-in-out infinite alternate}
+.sv-fog.a{left:-20vmax;top:-10vmax;background:radial-gradient(circle,rgba(132,166,90,.22),transparent 65%)}
+.sv-fog.b{right:-25vmax;bottom:-20vmax;background:radial-gradient(circle,rgba(229,55,44,.18),transparent 65%);animation-delay:1.4s,0s;animation-duration:3s,28s}
+@keyframes sv-fogin{to{opacity:1}}
+@keyframes sv-drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(8vmax,-5vmax) scale(1.15)}}
+.sv-vig{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.85) 100%)}
+.sv-hud{position:absolute;top:18px;left:18px;z-index:5;display:flex;flex-direction:column;gap:6px;font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+.sv-rec{display:inline-flex;align-items:center;gap:8px;color:var(--red)}
+.sv-rec i{width:8px;height:8px;border-radius:50%;background:var(--red);animation:sv-blink 1s steps(2) infinite}
+@keyframes sv-blink{50%{opacity:0}}
+.sv-type{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;font-family:var(--font-mono);font-size:12px;letter-spacing:.3em;color:var(--green);white-space:nowrap;opacity:0}
+.sv-in .sv-type{animation:sv-type 1.5s steps(1) .2s both}
+@keyframes sv-type{0%{opacity:1;clip-path:inset(0 100% 0 0)}20%{clip-path:inset(0 70% 0 0)}40%{clip-path:inset(0 40% 0 0)}60%{clip-path:inset(0 0 0 0)}80%{opacity:1}85%{opacity:0}90%{opacity:1}100%{opacity:0}}
+.sv-ecg{position:absolute;left:0;right:0;top:50%;height:120px;transform:translateY(-50%);z-index:4;pointer-events:none;opacity:0}
+.sv-ecg path{fill:none;stroke:var(--red);stroke-width:2.5;stroke-linejoin:round;filter:drop-shadow(0 0 6px rgba(229,55,44,.9));stroke-dasharray:2600;stroke-dashoffset:2600}
+.sv-in .sv-ecg{animation:sv-ecgfade 1.9s ease 1.25s forwards}
+.sv-in .sv-ecg path{animation:sv-ecgdraw 1.3s cubic-bezier(.5,0,.5,1) 1.25s forwards}
+@keyframes sv-ecgdraw{to{stroke-dashoffset:0}}
+@keyframes sv-ecgfade{0%{opacity:1}75%{opacity:1}100%{opacity:0}}
+.sv-flash{position:absolute;inset:0;z-index:6;background:#fff;opacity:0;pointer-events:none}
+.sv-in .sv-flash{animation:sv-flash .5s ease-out 2.75s forwards}
+@keyframes sv-flash{0%{opacity:.55}100%{opacity:0}}
+.sv-center{position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(14px,3vh,28px);padding:0 16px;text-align:center}
+.sv-kicker{font-family:var(--font-mono);font-size:11px;letter-spacing:.42em;color:var(--red);text-transform:uppercase;opacity:0}
+.sv-in .sv-kicker{animation:sv-fade .8s ease 3.9s both}
+.sv-title{position:relative;margin:0;font-family:var(--font-display);font-weight:700;line-height:.9;font-size:clamp(2.6rem,12.5vw,9.5rem);letter-spacing:.06em;display:flex;justify-content:center}
+.sv-title .l{display:inline-block;opacity:0;color:var(--bone);text-shadow:0 0 30px rgba(231,228,214,.25)}
+.sv-title .l.m{color:var(--red);text-shadow:0 0 34px rgba(229,55,44,.65)}
+.sv-in .sv-title .l{animation:sv-letter .7s steps(6) both;animation-delay:calc(2.75s + var(--i) * .09s)}
+.sv-done .sv-title .l{opacity:1}
+@keyframes sv-letter{0%{opacity:0;transform:translate(var(--dx),var(--dy)) skewX(25deg);filter:blur(6px)}30%{opacity:1;transform:translate(calc(var(--dx) * -.4),0) skewX(-12deg);filter:blur(0)}45%{opacity:.15}60%{opacity:1;transform:translate(2px,0)}75%{opacity:.6}100%{opacity:1;transform:none}}
+.sv-title::before,.sv-title::after{content:attr(data-text);position:absolute;inset:0;display:flex;justify-content:center;letter-spacing:inherit;pointer-events:none;opacity:0}
+.sv-title::before{color:rgba(229,55,44,.8);transform:translate(-4px,0);mix-blend-mode:screen}
+.sv-title::after{color:rgba(80,220,230,.6);transform:translate(4px,0);mix-blend-mode:screen}
+.sv-title.glitchy::before{animation:sv-glA 5s steps(1) 3.6s infinite}
+.sv-title.glitchy::after{animation:sv-glB 5s steps(1) 3.6s infinite}
+@keyframes sv-glA{0%,100%{opacity:0}2%{opacity:1;clip-path:inset(10% 0 60% 0)}4%{opacity:1;clip-path:inset(55% 0 20% 0);transform:translate(-8px,0)}6%{opacity:0}62%{opacity:0}63%{opacity:1;clip-path:inset(30% 0 45% 0);transform:translate(-5px,1px)}65%{opacity:0}}
+@keyframes sv-glB{0%,100%{opacity:0}2%{opacity:1;clip-path:inset(62% 0 8% 0)}4%{opacity:1;clip-path:inset(5% 0 70% 0);transform:translate(8px,0)}6%{opacity:0}62%{opacity:0}63%{opacity:1;clip-path:inset(48% 0 25% 0);transform:translate(6px,-1px)}65%{opacity:0}}
+.sv-line{width:min(520px,70vw);height:1px;background:linear-gradient(90deg,transparent,var(--amber),transparent);opacity:0;transform:scaleX(0)}
+.sv-in .sv-line{animation:sv-line .9s ease 3.7s both}
+@keyframes sv-line{to{opacity:.8;transform:scaleX(1)}}
+.sv-tag{max-width:34rem;font-size:clamp(.95rem,2.4vw,1.15rem);line-height:1.7;color:var(--bone);opacity:0}
+.sv-tag span{color:var(--amber)}
+.sv-in .sv-tag{animation:sv-fade 1s ease 4.3s both}
+@keyframes sv-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.sv-done .sv-kicker,.sv-done .sv-tag{opacity:1}
+.sv-done .sv-line{opacity:.8;transform:none}
+.sv-done .sv-type,.sv-done .sv-ecg{display:none}
+.sv-play{position:relative;display:inline-flex;align-items:center;gap:12px;padding:16px 38px;font-family:var(--font-display);font-weight:700;font-size:1.2rem;letter-spacing:.04em;color:#111311;background:var(--amber);border:0;cursor:pointer;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);animation:sv-fade .7s ease both, sv-pulse 2.2s ease-in-out .7s infinite;transition:transform .12s}
+.sv-play:hover{transform:translateY(-2px)}
+.sv-play:active{transform:scale(.97)}
+@keyframes sv-pulse{0%,100%{box-shadow:0 0 0 0 rgba(242,163,58,.0);filter:brightness(1)}50%{filter:brightness(1.12)}}
+.sv-playwrap{position:relative;display:inline-flex}
+.sv-playwrap::before{content:"";position:absolute;inset:-10px;background:radial-gradient(closest-side,rgba(242,163,58,.45),transparent);filter:blur(10px);animation:sv-glow 2.2s ease-in-out infinite;z-index:-1}
+@keyframes sv-glow{0%,100%{opacity:.35}50%{opacity:.9}}
+.sv-hint{font-size:12px;color:var(--dim);display:inline-flex;align-items:center;gap:6px;animation:sv-fade .7s ease .3s both}
+.sv-slot{min-height:92px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.sv-skip{position:absolute;right:18px;bottom:18px;z-index:9;font-family:var(--font-mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);background:rgba(17,19,17,.6);border:1px solid var(--line);padding:8px 12px;cursor:pointer}
+.sv-skip:hover{color:var(--bone);border-color:var(--dim)}
+.sv-foot{position:absolute;left:18px;bottom:20px;z-index:5;font-family:var(--font-mono);font-size:10px;letter-spacing:.2em;color:var(--dim);opacity:.7;text-transform:uppercase}
+.sv-leave{animation:sv-leave .7s ease forwards}
+@keyframes sv-leave{0%{filter:none}30%{filter:brightness(2) contrast(1.4)}100%{filter:brightness(0);transform:scale(1.04)}}
+@media (prefers-reduced-motion: reduce){.sv-in *,.sv-in *::before,.sv-in *::after{animation-delay:0s!important;animation-duration:.01s!important;animation-iteration-count:1!important}}
+@media (max-width:640px){.sv-foot{display:none}.sv-hud{font-size:10px;top:14px;left:14px}}
+`;
+
+function SplashNoise() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const cv = ref.current; if (!cv) return;
+    const ctx = cv.getContext && cv.getContext("2d"); if (!ctx) return;
+    const W = 160, H = 90; cv.width = W; cv.height = H;
+    const img = ctx.createImageData(W, H);
+    let raf = 0, last = 0, live = true;
+    const draw = (t) => {
+      if (!live) return;
+      raf = requestAnimationFrame(draw);
+      if (t - last < 55) return; last = t;
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) { const v = (Math.random() * 255) | 0; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+      ctx.putImageData(img, 0, 0);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => { live = false; cancelAnimationFrame(raf); };
+  }, []);
+  return <canvas ref={ref} className="sv-noise" aria-hidden="true" />;
+}
+
+function SplashScreen({ onPlay }) {
+  const [ready, setReady] = useState(false);
+  const [done, setDone] = useState(false);   // ข้ามอินโทรแล้ว
+  const [leaving, setLeaving] = useState(false);
+  const letters = useMemo(() => SPLASH_TITLE.split("").map((c, i) => ({ c, i, dx: (Math.random() * 60 - 30).toFixed(0) + "px", dy: (Math.random() * 24 - 12).toFixed(0) + "px" })), []);
+  useEffect(() => {
+    // พยายามเล่นเสียงประกอบ (ดังเฉพาะเมื่อเบราว์เซอร์อนุญาต)
+    AUDIO.unlock();
+    const ids = [[150, "glitch"], [1300, "heartbeat"], [2050, "heartbeat"], [2750, "glitch"]].map(([ms, n]) => setTimeout(() => AUDIO.play(n), ms));
+    ids.push(setTimeout(() => setReady(true), SPLASH_READY_MS));
+    return () => ids.forEach(clearTimeout);
+  }, []);
+  const skip = () => { AUDIO.unlock(); setDone(true); setReady(true); };
+  const play = () => {
+    if (leaving) return;
+    AUDIO.unlock(); AUDIO.play("glitch"); setTimeout(() => AUDIO.play("heartbeat"), 120);
+    setLeaving(true);
+    setTimeout(() => onPlay(), 650);
+  };
+  return (
+    <div className={"sv-root " + (done ? "sv-done" : "sv-in") + (leaving ? " sv-leave" : "")} role="region" aria-label="SURVIMIND หน้าแรก">
+      <style>{SPLASH_CSS}</style>
+      <div className="sv-fog a" /><div className="sv-fog b" />
+      <SplashNoise />
+      <div className="sv-vig" />
+      <div className="sv-hud" aria-hidden="true">
+        <span className="sv-rec"><i />REC · CAM 04</span>
+        <CctvClock />
+      </div>
+      <div className="sv-type" aria-hidden="true">SIGNAL DETECTED…</div>
+      <svg className="sv-ecg" viewBox="0 0 1600 120" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 60 H520 L545 60 L560 30 L578 98 L598 8 L618 112 L636 60 H900 L925 60 L940 34 L958 94 L978 14 L998 106 L1016 60 H1600" />
+      </svg>
+      <div className="sv-flash" aria-hidden="true" />
+      <div className="sv-center">
+        <span className="sv-kicker">Survive · Reveal · Grow</span>
+        <h1 className="sv-title glitchy" data-text={SPLASH_TITLE} aria-label={SPLASH_TITLE}>
+          {letters.map((l) => <span key={l.i} aria-hidden="true" className={"l" + (l.i >= 5 ? " m" : "")} style={{ "--i": l.i, "--dx": l.dx, "--dy": l.dy }}>{l.c}</span>)}
+        </h1>
+        <div className="sv-line" />
+        <p className="sv-tag">เมื่อทุกอย่างพังลง ทุกการตัดสินใจจะเผยตัวตนที่แท้จริงของคุณ<br /><span>เอาชีวิตรอดให้ได้… แล้วคุณจะรู้จักตัวเองมากขึ้น</span></p>
+        <div className="sv-slot">
+          {ready && (<>
+            <span className="sv-playwrap"><button id="splash-play" className="sv-play" onClick={play} autoFocus><Icon name="arrow-right" size={20} />เริ่มเล่น</button></span>
+            <span className="sv-hint"><Icon name="headphones" size={13} />แนะนำให้ใส่หูฟัง เกมนี้มีเสียง</span>
+          </>)}
+        </div>
+      </div>
+      {!ready && <button className="sv-skip" onClick={skip}>ข้ามอินโทร ›</button>}
+      <div className="sv-foot" aria-hidden="true">Project Pitching USC10967 · Track 1</div>
+    </div>
+  );
+}
+
 function TitleScreen({ onStart, onData }) {
   const detected = useDetectedDevice();
   const touch = (() => { try { return window.matchMedia("(pointer: coarse)").matches; } catch (e) { return false; } })();
@@ -9453,7 +9606,7 @@ class ScreenBoundary extends React.Component {
 
 /* ========================= App ========================= */
 function App() {
-  const [screen, setScreen] = useState("title"); // title → profile → scenario → select → intro → game → result (+ data สำหรับเจ้าของ)
+  const [screen, setScreen] = useState("splash"); // splash → title → profile → scenario → select → intro → game → result (+ data สำหรับเจ้าของ)
   const [profile, setProfile] = useState(null);   // { sid, gender, age }
   const [device, setDevice] = useState("pc");
   const [charId, setCharId] = useState(null);
@@ -9498,7 +9651,7 @@ function App() {
     }
   };
   const restart = () => { AUDIO.stopSiren(); setActiveScenario("zombie"); setResult(null); setCharId(null); setScenario(null); setProfile(null); setRunId((r) => r + 1); setScreen("title"); };
-  const mobile = device === "mobile" && screen !== "title";
+  const mobile = device === "mobile" && screen !== "title" && screen !== "splash";
 
   return (
     <MotionConfig reducedMotion="user">
@@ -9510,6 +9663,7 @@ function App() {
             : { width: "100%", height: "100%", background: "var(--char)" }}>
           <AnimatePresence mode="wait">
             <motion.div key={screen + runId} {...fade} className="h-full w-full"><ScreenBoundary>
+              {screen === "splash" && <SplashScreen onPlay={() => setScreen("title")} />}
               {screen === "title" && <TitleScreen onStart={start} onData={() => setScreen("data")} />}
               {screen === "profile" && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("title")} initial={profile} />}
               {screen === "data" && <DataScreen onBack={() => setScreen("title")} />}
