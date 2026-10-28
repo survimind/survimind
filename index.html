@@ -9209,7 +9209,9 @@ const aiCacheSet = (k, v) => { try { localStorage.setItem(AI_CACHE_PREFIX + k, J
 const aiCacheDel = (k) => { try { localStorage.removeItem(AI_CACHE_PREFIX + k); } catch (e) {} };
 
 async function requestAIReport(payload, signal) {
-  const r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ player: payload }), signal });
+  let r;
+  try { r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ player: payload }), signal }); }
+  catch (e) { if (signal && signal.aborted) throw e; throw new Error("network"); }
   const j = await r.json().catch(() => null);
   if (!r.ok || !j || !j.ok || !j.report || typeof j.report.summary !== "string") throw new Error((j && j.error) || "http_" + r.status);
   return { report: j.report, model: j.model || "Gemini", at: Date.now() };
@@ -9328,7 +9330,7 @@ function AICoach({ storeKey, payload, report, wide }) {
       {err && (
         <div className="flex gap-3 p-3 border-l-2 text-sm leading-relaxed" style={{ borderColor: "var(--amber)", background: "rgba(242,163,58,.08)" }}>
           <span className="shrink-0 mt-0.5" style={{ color: "var(--amber)" }}><Icon name="triangle-alert" size={16} /></span>
-          <span>{COACH_ERROR_TEXT[err] || "AI Coach ตอบไม่ได้ตอนนี้ คำถามนี้ยังไม่ถูกนับ กดส่งอีกครั้งได้เลย"}</span>
+          <span>{COACH_ERROR_TEXT[err] || "AI Coach ตอบไม่ได้ตอนนี้ คำถามนี้ยังไม่ถูกนับ กดส่งอีกครั้งได้เลย"} <span className="f-mono text-[11px] whitespace-nowrap" style={{ color: "var(--dim)" }}>(รหัส: {err})</span></span>
         </div>
       )}
 
@@ -9423,7 +9425,7 @@ function AIAnalysisSection({ result, char, type, tm, wide }) {
         <div className="flex flex-col gap-3">
           <div className="flex gap-3 p-3 border-l-2 text-sm leading-relaxed" style={{ borderColor: "var(--amber)", background: "rgba(242,163,58,.08)" }}>
             <span className="shrink-0 mt-0.5" style={{ color: "var(--amber)" }}><Icon name="triangle-alert" size={16} /></span>
-            <span>{AI_ERROR_TEXT[state.code] || "ตอนนี้ AI ยังไม่พร้อมใช้งาน"} ผลวิเคราะห์แบบมาตรฐานด้านล่างยังดูได้ครบทุกส่วน</span>
+            <span>{AI_ERROR_TEXT[state.code] || "ตอนนี้ AI ยังไม่พร้อมใช้งาน"} ผลวิเคราะห์แบบมาตรฐานด้านล่างยังดูได้ครบทุกส่วน <span className="f-mono text-[11px] whitespace-nowrap" style={{ color: "var(--dim)" }}>(รหัส: {state.code})</span></span>
           </div>
           <div><TacButton id="ai-retry" icon="rotate-ccw" tone="green" onClick={() => setRun((r) => r + 1)}>ลองวิเคราะห์ด้วย AI อีกครั้ง</TacButton></div>
         </div>
