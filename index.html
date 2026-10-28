@@ -580,8 +580,8 @@ const UAN_LINE = {
     { s: 8.05, e: 11.0, text: "จู่ๆ คนก็กระโดดไล่กัดกันต่อหน้าต่อตา" },
     { s: 11.45, e: 12.7, text: "น่ากลัวมาก!" },
   ],
-  // อารมณ์ของอ้วนตามช่วงเสียง: หอบ → พูดตื่นตระหนก → หวาดกลัว
-  moods: [{ t: 0, mood: "tired" }, { t: 1.0, mood: "talk" }, { t: 2.4, mood: "tired" }, { t: 2.9, mood: "talk" }, { t: 5.0, mood: "tired" }, { t: 6.2, mood: "talk" }, { t: 11.4, mood: "scared" }],
+  // อารมณ์ของอ้วนตามช่วงเสียง: ตกใจ → ตะโกนเล่าแบบตื่นตระหนก → หวาดกลัว (ไม่ใช้หน้าเหนื่อย เพราะชีตใหม่เป็นหน้าหลับตา)
+  moods: [{ t: 0, mood: "shock" }, { t: 1.0, mood: "yell" }, { t: 2.4, mood: "shock" }, { t: 2.9, mood: "yell" }, { t: 5.0, mood: "shock" }, { t: 6.2, mood: "yell" }, { t: 11.4, mood: "scared" }],
 };
 const UAN_CLIP = (() => {
   let el = null;
@@ -5353,6 +5353,7 @@ const EXPR_OF = {
   idle: ["neutral"], study: ["neutral"], worry: ["worry", "sad", "scared", "neutral"], scared: ["scared", "surprised", "worry"],
   shock: ["surprised", "scared"], angry: ["angry", "worry", "scared"], happy: ["happy", "laugh", "smile"], shy: ["shy", "smile"],
   sad: ["sad", "worry", "neutral"], tired: ["tired", "sad", "neutral"], talk: ["talk", "smile", "neutral"],
+  yell: ["surprised", "scared"],
 };
 const EMOTE = {
   idle:   { head: { rotate: [0, -3, 0, 3, 0] }, headT: 6, fx: [] },
@@ -5365,6 +5366,7 @@ const EMOTE = {
   sad:    { head: { rotate: [7, 9, 7], y: [3, 5, 3] }, headT: 3, fx: ["tear"] },
   study:  { head: { rotate: [7, 10, 7, 4, 7], y: [3, 5, 3, 2, 3] }, headT: 4.2, fx: [] },
   talk:   { head: { rotate: [-3, 3, -2, 2, -3], y: [0, -4, 0, -3, 0] }, headT: 0.55, fx: ["sweat"] },
+  yell:   { head: { rotate: [-5, 4, -4, 5, -5], y: [0, -6, 0, -5, 0] }, headT: 0.45, body: { x: [-1.5, 1.5, -1.5] }, bodyT: 0.2, fx: ["sweat", "shock"] },
   tired:  { head: { rotate: [5, 10, 5], y: [0, 4, 0] }, headT: 1.4, body: { scaleY: [1, 0.985, 1] }, bodyT: 1.4, fx: ["sweat", "breath"] },
 };
 
@@ -5443,7 +5445,7 @@ function Actor({ id, x, y, h = 420, dim = false, enter = null, delay = 0, look =
     return () => { alive = false; ts.forEach(clearTimeout); };
   }, [hasExpr]);
   useEffect(() => {
-    if (!hasExpr || emotion !== "talk") { setMouth(false); return; }
+    if (!hasExpr || (emotion !== "talk" && emotion !== "yell")) { setMouth(false); return; }
     const t = setInterval(() => setMouth((m) => !m), 170);
     return () => clearInterval(t);
   }, [hasExpr, emotion]);
@@ -5472,7 +5474,8 @@ function Actor({ id, x, y, h = 420, dim = false, enter = null, delay = 0, look =
   // เลือกหน้าตามอารมณ์ (มุมหน้าตรงเท่านั้น)
   let exprKey = null;
   if (hasExpr && view === "front") {
-    const order = emotion === "talk" ? (mouth ? ["talk", "smile", "neutral"] : ["neutral"]) : (EXPR_OF[emotion] || ["neutral"]);
+    const order = emotion === "talk" ? (mouth ? ["talk", "smile", "neutral"] : ["neutral"])
+      : emotion === "yell" ? (mouth ? ["surprised", "talk"] : ["talk", "scared"]) : (EXPR_OF[emotion] || ["neutral"]);
     exprKey = order.find((k) => sp.face && sp.face[k] && sp.expr[k]) || null;
     if (blink && ["idle", "study", "worry", "sad", "talk"].includes(emotion) && sp.face.tired && sp.expr.tired) exprKey = "tired";
   }
@@ -5591,7 +5594,7 @@ function SceneArt({ n, charId, phase = 0, mood = "idle", moods: introMoods = {} 
     case "i1": body = <SceneClassroom mode="calm" noDesks actors={<SeatedClass />} />; break;
     case "i2": body = <SceneWindowBoom boom={phase >= 1} />; break;
     case "i3": body = <SceneIntro3 beat={phase} />; break;
-    case "i4": body = <SceneClassroom mode="open" actors={<g><Squad ids={["ek", "waen", "fah", "bom"]} layout="left" look="right" mood="shock" /><Actor id="uan" x={1400} y={662} h={410} enter="right" walkDur={1.1} emotion={introMoods.uan || "tired"} /></g>} />; break;
+    case "i4": body = <SceneClassroom mode="open" actors={<g><Squad ids={["ek", "waen", "fah", "bom"]} layout="left" look="right" mood="shock" /><Actor id="uan" x={1400} y={662} h={410} enter="right" walkDur={1.1} emotion={introMoods.uan || "shock"} /></g>} />; break;
     case "i5": body = <SceneRunOut beat={phase} />; break;
     case "i6": body = <SceneFahGrab beat={phase} />; break;
     case "i7": body = <SceneDoorAttack shot={phase} />; break;
@@ -7957,7 +7960,7 @@ const ZOMBIE_INTERLUDES = {
 const interludesFor = () => (isForest() ? FOREST_INTERLUDES : ZOMBIE_INTERLUDES);
 
 /* ---------- ภาพฉากคั่น (ซอมบี้): สถานที่ถัดไป + ทั้งห้าคนเดินเข้าฉาก ---------- */
-const ZX_MOOD = { 0: ["worry", "scared"], 1: ["worry", "scared"], 2: ["tired", "worry"], 3: ["tired", "angry"], 4: ["worry", "worry"], 5: ["worry", "shock"], 6: ["tired", "tired"], 7: ["worry", "shock"], 8: ["worry", "shock"] };
+const ZX_MOOD = { 0: ["worry", "scared"], 1: ["worry", "scared"], 2: ["worry", "worry"], 3: ["worry", "angry"], 4: ["worry", "worry"], 5: ["worry", "shock"], 6: ["worry", "tired"], 7: ["worry", "shock"], 8: ["worry", "shock"] };
 function ZxWalkers({ k, beat }) {
   if (beat < 1) return null;
   const [m1, m2] = ZX_MOOD[k] || ["worry", "worry"];
