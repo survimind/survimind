@@ -2993,8 +2993,8 @@ const FOREST_INTERLUDES = {
 const bankFor = (id) => (isForest() ? FOREST_BANK : QUESTION_BANK)[id];
 const LOCATIONS = {
   1: { key: "classroom602", name: "ห้องเรียน 602", tint: "#3a4a3a" },
-  2: { key: "corridor6", name: "โถงทางเดินชั้น 6", tint: "#3d3a36" },
-  3: { key: "stairs4", name: "บันไดทางลงชั้น 4", tint: "#33393d" },
+  2: { key: "corridor6", name: "โถงทางเดินชั้น 4 · ตึก 6", tint: "#3d3a36" },
+  3: { key: "stairs4", name: "บันไดหนีไฟ · ตึก 6", tint: "#33393d" },
   4: { key: "infirmary", name: "ห้องพยาบาล", tint: "#2f4545" },
   5: { key: "infirmary", name: "ห้องพยาบาล", tint: "#2f4545" },
   6: { key: "canteen", name: "โรงอาหาร", tint: "#463a2c" },
@@ -5607,6 +5607,7 @@ function SceneArt({ n, charId, phase = 0, mood = "idle", moods: introMoods = {} 
     case "fx8": body = <SceneForestInterlude8 beat={phase} />; break;
     case "fx9": body = <SceneForestInterlude9 beat={phase} />; break;
     case "fx10": body = <SceneForestEnding beat={phase} />; break;
+    case "zx0": case "zx1": case "zx2": case "zx3": case "zx4": case "zx5": case "zx6": case "zx7": case "zx8": body = <SceneZombieInterlude k={+n.slice(2)} beat={phase} />; break;
     case "end": body = <SceneEscape outcome={phase} />; break;
     default: body = null;
   }
@@ -7904,6 +7905,97 @@ function EndingScreen({ result, charId, forest = false, onDone }) {
   );
 }
 
+// ฉากเล่าเรื่องคั่นระหว่างข้อ · มหาวิทยาลัยซอมบี้ (key = index ข้อที่เพิ่งตอบเสร็จ) — เชื่อมสถานที่ตามบท ไม่ขัดกับตัวเลือกใดของผู้เล่น
+// beat 0 = ภาพสถานที่ถัดไป · beat 1 = ทั้งห้าคนเดินเข้าฉาก · beat 2+ = อารมณ์ของเหตุการณ์ (ไม่มีไฟล์เสียงพากย์ ใช้ซับไตเติล + เสียงประกอบ)
+const ZOMBIE_INTERLUDES = {
+  0: { art: "zx0", lines: [
+    { at: 0, sfx: "doorbang", sub: "ประตูห้อง 602 สั่นสะท้าน บานพับเริ่มหลุดออกจากวงกบ" },
+    { at: 3400, sfx: "steps", sub: "ทั้งห้าคนตัดสินใจหนีออกทางประตูหลังห้อง" },
+    { at: 6800, sfx: "ambient", sub: "โถงทางเดินชั้น 4 มืดสลัว ควันจากตึก 4 ลอยเข้ามาจนแสบตา" },
+  ], end: 10600 },
+  1: { art: "zx1", lines: [
+    { at: 0, sfx: "ambient", sub: "ทุกคนฝ่าควันมาจนถึงปากบันไดหนีไฟ" },
+    { at: 3300, sfx: "steps", sub: "รีบก้าวลงบันไดทีละขั้น โดยไม่มีใครกล้าพูดอะไร" },
+    { at: 6600, sfx: "bang", sub: "เสียงกรีดร้องดังมาจากชั้นล่าง ตามด้วยเสียงโลหะล้มกระแทกพื้น" },
+  ], end: 10400 },
+  2: { art: "zx2", lines: [
+    { at: 0, sfx: "steps", sub: "เมื่อพ้นบันไดมาได้ ทุกคนแทบหายใจไม่ทัน" },
+    { at: 3200, sfx: "ambient", sub: "ป้ายห้องพยาบาลส่องแสงสลัวอยู่ปลายทางเดิน" },
+    { at: 6400, sfx: "zgrowl", sub: "ข้างในยังมีของใช้กระจัดกระจาย แต่เสียงลากเท้าก็ดังใกล้เข้ามา" },
+  ], end: 10000 },
+  3: { art: "zx3", lines: [
+    { at: 0, sfx: "doorbang", sub: "ทุกคนปิดประตูห้องพยาบาลไว้ แล้วนั่งพักครู่หนึ่ง" },
+    { at: 3300, sfx: "steps", sub: "บอมเดินวนไปมา อยากรีบออกไปหาทางหนีให้เร็วที่สุด" },
+    { at: 6600, sfx: "shout", sub: "แต่แว่นยืนยันว่าข้างนอกอันตรายเกินไป เสียงของทั้งคู่เริ่มดังขึ้นเรื่อย ๆ" },
+  ], end: 10600 },
+  4: { art: "zx4", lines: [
+    { at: 0, sfx: "steps", sub: "สุดท้าย ทุกคนออกจากห้องพยาบาลไปพร้อมกัน" },
+    { at: 3300, sfx: "ambient", sub: "ทางเดียวที่ไปถึงลานหน้ามหาวิทยาลัยได้ คือต้องผ่านโรงอาหาร" },
+    { at: 6600, sfx: "zgrowl", sub: "กลางโรงอาหาร มีซอมบี้ตัวหนึ่งยืนโยกตัวขวางทางเดินอยู่" },
+  ], end: 10400 },
+  5: { art: "zx5", lines: [
+    { at: 0, sfx: "steps", sub: "ทุกคนค่อย ๆ ย่องผ่านแถวโต๊ะอาหารไปทีละคน" },
+    { at: 3400, sfx: "heartbeat", sub: "อีกไม่กี่ก้าวก็จะถึงประตูทางออกแล้ว…" },
+    { at: 6400, sfx: "bang", sub: "โครม! เสียงของหล่นกระแทกพื้นดังก้องไปทั้งโรงอาหาร" },
+  ], end: 9400 },
+  6: { art: "zx6", lines: [
+    { at: 0, sfx: "steps", sub: "ทุกคนวิ่งออกจากโรงอาหารโดยไม่หันกลับไปมอง" },
+    { at: 3300, sfx: "doorbang", sub: "ประตูห้องกระจายเสียงเปิดอยู่ ทุกคนรีบเข้าไปแล้วล็อกประตูทันที" },
+    { at: 6600, sfx: "ambient", sub: "เป็นครั้งแรกที่ทุกคนได้หยุดหายใจ… แม้จะแค่หนึ่งนาที" },
+  ], end: 10400 },
+  7: { art: "zx7", lines: [
+    { at: 0, sfx: "alert", sub: "เสียงไซเรนรถทหารดังมาจากด้านหน้ามหาวิทยาลัย" },
+    { at: 3600, sfx: "steps", sub: "ทุกคนวิ่งลงไปถึงลานกว้าง รถทหารจอดอยู่อีกฝั่งของลาน" },
+    { at: 7000, sfx: "zgrowl", sub: "แต่ระหว่างทาง ฝูงซอมบี้กำลังเดินเตร่อยู่เต็มลาน" },
+  ], end: 10800 },
+  8: { art: "zx8", lines: [
+    { at: 0, sfx: "steps", sub: "ทุกคนฝ่าลานกว้างมาจนเกือบถึงรถทหาร" },
+    { at: 3300, sfx: "shout", sub: "ทหารตะโกนเร่งให้รีบขึ้นรถ เครื่องยนต์เริ่มคำราม" },
+    { at: 6500, sfx: "heartbeat", sub: "อีกแค่ไม่กี่ก้าว… แต่แล้วก็มีเสียงร้องดังขึ้นจากข้างหลัง" },
+  ], end: 9900 },
+};
+const interludesFor = () => (isForest() ? FOREST_INTERLUDES : ZOMBIE_INTERLUDES);
+
+/* ---------- ภาพฉากคั่น (ซอมบี้): สถานที่ถัดไป + ทั้งห้าคนเดินเข้าฉาก ---------- */
+const ZX_MOOD = { 0: ["worry", "scared"], 1: ["worry", "scared"], 2: ["tired", "worry"], 3: ["tired", "angry"], 4: ["worry", "worry"], 5: ["worry", "shock"], 6: ["tired", "tired"], 7: ["worry", "shock"], 8: ["worry", "shock"] };
+function ZxWalkers({ k, beat }) {
+  if (beat < 1) return null;
+  const [m1, m2] = ZX_MOOD[k] || ["worry", "worry"];
+  return (
+    <g>
+      {SQUAD.map((id, i) => {
+        const x = 420 + i * 190, y = 830 - (i % 2) * 22, h = 400 - (i % 2) * 20;
+        let emotion = beat >= 2 ? m2 : m1;
+        if (k === 3 && beat >= 2) emotion = id === "bom" || id === "waen" ? "angry" : "worry";
+        return beat === 1
+          ? <Actor key={id} id={id} x={x} y={y} h={h} enter="left" delay={i * 0.22} walkDur={1.5} emotion={emotion} />
+          : <Actor key={id} id={id} x={x} y={y} h={h} look={k === 3 ? (i < 2 ? "right" : "left") : "right"} emotion={emotion} />;
+      })}
+    </g>
+  );
+}
+function SceneZombieInterlude({ k, beat }) {
+  const actors = <ZxWalkers k={k} beat={beat} />;
+  const dim = beat === 0 ? <rect width="1600" height="900" fill="#000" opacity=".28" /> : null;
+  let scene = null;
+  if (k === 0) scene = <SceneCorridor actors={actors} />;
+  else if (k === 1) scene = <SceneStairs actors={actors} />;
+  else if (k === 2) scene = <SceneInfirmary actors={actors} />;
+  else if (k === 3) scene = <SceneInfirmary actors={actors} />;
+  else if (k === 4 || k === 5) scene = <SceneCanteen actors={actors} />;
+  else if (k === 6) scene = <SceneBroadcast actors={actors} />;
+  else if (k === 7) scene = <SceneYard actors={actors} />;
+  else scene = <SceneGate fallen={null} actors={actors} />;
+  return (
+    <g>
+      {scene}
+      {dim}
+      {k === 5 && beat >= 2 && <motion.rect width="1600" height="900" fill="#fff" initial={{ opacity: 0.5 }} animate={{ opacity: 0 }} transition={{ duration: 0.5 }} />}
+      {(k === 7 || k === 8) && beat >= 2 && <SirenWash intensity={0.3} dur={1.4} />}
+    </g>
+  );
+}
+
 function useFit16x9(ref) {
   const [box, setBox] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -8498,7 +8590,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   useEffect(() => { if (pendingIl != null && qi === pendingIl) { const k = pendingIl; setPendingIl(null); startInterlude(k); } }, [pendingIl, qi]);
   const edSkipInterlude = () => { token.current++; clearAll(); setInterlude(null); advance(); };
   const startInterlude = (k) => {
-    const il = FOREST_INTERLUDES[k]; const my = ++token.current;
+    const il = interludesFor()[k]; const my = ++token.current;
     setPicked(null); setSel(null); setHint(null); setArmed(null); setItemNote(null); setLastFx(null); setTyped("");
     setPhase("interlude");
     if (il.voice && (window.__QV || {})[il.voice]) later(() => { if (token.current !== my) return; AUDIO.duck(true); playVoice("clip:" + il.voice, il.end, voice.current).then(() => AUDIO.duck(false)); }, il.voiceAt || 0);
@@ -8510,7 +8602,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   };
   const advance = () => {
     setDeltas({}); setProbe(null);
-    if (isForest() && FOREST_INTERLUDES[qi] && !handled.current.has("i" + qi)) { handled.current.add("i" + qi); startInterlude(qi); return; }
+    if (interludesFor()[qi] && !handled.current.has("i" + qi)) { handled.current.add("i" + qi); startInterlude(qi); return; }
     if (qi < questions.length - 1) { setPicked(null); setTyped(""); setItemNote(null); setLastFx(null); setQi(qi + 1); setPhase("enter"); }
     else onComplete({ scores: scoresRef.current, meters: metersRef.current, inventory: invRef.current, history: histRef.current,
       telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
@@ -8872,9 +8964,9 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
                   className="f-mono text-xs w-8 h-7 inline-flex items-center justify-center border"
                   style={i === qi && phase !== "interlude" ? { background: "var(--green)", color: "#111311", borderColor: "var(--green)" } : { borderColor: "var(--line)", color: "var(--bone)" }}>{i + 1}</button>
               ))}
-              {isForest() && (<>
+              {(<>
                 <span className="lbl ml-2 mr-1" style={{ color: "var(--green)" }}>ฉากคั่นหลังข้อ</span>
-                {Object.keys(FOREST_INTERLUDES).map((k) => +k).map((k) => (
+                {Object.keys(interludesFor()).map((k) => +k).map((k) => (
                   <button key={"il" + k} id={"edi-" + (k + 1)} onClick={() => { AUDIO.play("click"); edInterlude(k); }}
                     className="f-mono text-xs w-8 h-7 inline-flex items-center justify-center border"
                     style={interlude && interlude.k === k ? { background: "var(--amber)", color: "#111311", borderColor: "var(--amber)" } : { borderColor: "var(--line)", color: "var(--bone)" }}>{k + 1}</button>
