@@ -4458,7 +4458,7 @@ function IntroScreen({ onDone, onBack, intro, narration, startLabel = "เริ
   // ---- โหมด Editor: กระโดดไปฉากไหนก็ได้ทันที (เห็นเฉพาะเจ้าของ/ผู้แก้ไข) ----
   const [editor, setEditor] = useState(false);
   useEffect(() => {
-    if (!(window.claude && window.claude.use)) { setEditor(true); return; }
+    if (!(window.claude && window.claude.use)) { setEditor(EDITOR_BY_URL); return; }
     STORE.canSeeAll().then((v) => setEditor(!!v)).catch(() => {});
   }, []);
   const jumpTo = (k) => {
@@ -4665,10 +4665,12 @@ function ScenarioArt({ id }) {
     </svg>
   );
 }
+// นอก Claude (เช่น GitHub Pages) ผู้เล่นทั่วไปไม่เห็นแถบ EDITOR · ทีมเปิดได้โดยต่อท้ายลิงก์ด้วย ?editor
+const EDITOR_BY_URL = (() => { try { return new URLSearchParams(window.location.search).has("editor"); } catch (e) { return false; } })();
 function useIsEditor() {
   const [ed, setEd] = useState(false);
   useEffect(() => {
-    if (!(window.claude && window.claude.use)) { setEd(true); return; }
+    if (!(window.claude && window.claude.use)) { setEd(EDITOR_BY_URL); return; }
     STORE.canSeeAll().then((v) => setEd(!!v)).catch(() => {});
   }, []);
   return ed;
