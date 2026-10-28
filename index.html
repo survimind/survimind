@@ -4665,8 +4665,11 @@ function ScenarioArt({ id }) {
     </svg>
   );
 }
-// นอก Claude (เช่น GitHub Pages) ผู้เล่นทั่วไปไม่เห็นแถบ EDITOR · ทีมเปิดได้โดยต่อท้ายลิงก์ด้วย ?editor
-const EDITOR_BY_URL = (() => { try { return new URLSearchParams(window.location.search).has("editor"); } catch (e) { return false; } })();
+// แถบ EDITOR นอก Claude (เช่น GitHub Pages): SHOW_EDITOR = true → ทุกคนเห็น (ช่วงพัฒนา)
+// ⚠️ ก่อนเปิดให้คนทั่วไปเล่น/นำเสนอ เปลี่ยนเป็น false (ทีมยังเปิดได้ด้วยลิงก์ ?editor)
+// ดูมุมมองผู้เล่นจริงระหว่างพัฒนา: ต่อท้ายลิงก์ด้วย ?player
+const SHOW_EDITOR = true;
+const EDITOR_BY_URL = (() => { try { const q = new URLSearchParams(window.location.search); if (q.has("player")) return false; return SHOW_EDITOR || q.has("editor"); } catch (e) { return SHOW_EDITOR; } })();
 function useIsEditor() {
   const [ed, setEd] = useState(false);
   useEffect(() => {
