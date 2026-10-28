@@ -3188,6 +3188,158 @@ function qteScore(e) {
   return speed * (e.choice === "item" ? 1 : e.choice === "skill" ? 0.95 : 0.75);
 }
 
+/* ========================= Item Crisis · วิกฤตไอเทม =========================
+   เหตุการณ์ฉุกเฉินก่อนคำถามบางข้อ ผู้เล่นมี 12 วินาทีเลือกของในเป้มาแก้สถานการณ์
+   ไอเทมที่ตรงกับ "สิ่งที่ช่วยได้มากที่สุด" (best) = ได้ผลเต็มที่ · ตรงบางส่วน (ok) = พอช่วยได้ · ผิดชิ้น = เสียของเปล่า
+   ใช้มือเปล่าได้แต่โดนผลเสีย · หมดเวลา = ผลเสียหนัก · เคยแบ่งของให้เพื่อน = เพื่อนมาช่วยฟรี 1 ครั้ง
+   ไม่มีผลกับคะแนน MBTI (คำถาม A–D ยังตอบตามปกติ) · ผลถูกเก็บเป็น telemetry ด้านการบริหารทรัพยากร */
+const HAZ_MS = 12000;
+const TAG_LABEL = { command: "สั่งการ", distract: "ล่อความสนใจ", calm: "ปลอบขวัญ", light: "แสงสว่าง", navigate: "นำทาง", stealth: "ซ่อนตัว",
+  heal: "รักษา", cut: "ตัด", fight: "ต่อสู้", rescue: "ช่วยชีวิต", block: "กันขวาง", energy: "พลังงาน" };
+const HAZARDS = {
+  zombie: {
+    3: { icon: "lamp", title: "ไฟดับทั้งบันได!", desc: "ความมืดปกคลุมทุกชั้น เสียงลากเท้าดังใกล้เข้ามาจากชั้นล่าง",
+      best: ["light"], ok: ["navigate", "distract", "fight", "calm", "cut"],
+      win: { panic: -10, infection: -6 }, part: { panic: -5, infection: -2 }, bare: { panic: 6, infection: 4 }, fail: { panic: 12, infection: 8, health: -6 },
+      winText: "แสงส่องเห็นทางลงบันไดหนีไฟพอดี ทุกคนลงมาได้โดยไม่มีใครสะดุด",
+      partText: "ช่วยให้ทีมตั้งหลักได้ แต่ยังต้องคลำทางในความมืดอีกช่วงหนึ่ง",
+      bareText: "ทุกคนจับไหล่กันคลำทางลงไปทีละขั้น หัวใจเต้นแรงตลอดทาง",
+      failText: "ทุกคนชะงักในความมืดนานเกินไป เสียงลากเท้ามาถึงตัวก่อน" },
+    6: { icon: "heart-pulse", title: "เพื่อนโดนเศษกระจกบาด เลือดไหลไม่หยุด!", desc: "กลิ่นเลือดลอยไปทั่วโรงอาหาร ซอมบี้เริ่มหันมาทางนี้",
+      best: ["heal"], ok: ["calm", "stealth", "energy", "cut"],
+      win: { health: 12, panic: -6 }, part: { health: 5, panic: -3 }, bare: { health: -4, infection: 5 }, fail: { health: -10, infection: 8, panic: 6 },
+      winText: "ห้ามเลือดได้ทันเวลา แผลถูกพันแน่น กลิ่นเลือดจางลงจนซอมบี้หันไปทางอื่น",
+      partText: "เลือดไหลช้าลง เพื่อนยังเดินต่อไหว แต่ต้องคอยระวังแผลไว้",
+      bareText: "ใช้มือกดแผลไว้แน่น เลือดหยุดไหลช้า ๆ แต่ทุกคนเสียเวลาไปมาก",
+      failText: "ไม่มีใครทันทำอะไร เลือดหยดเป็นทาง ซอมบี้ตามกลิ่นมาติด ๆ" },
+    9: { icon: "users", title: "ฝูงซอมบี้ขวางทางไปรถทหาร!", desc: "อีกแค่ลานเดียวก็ถึงรถ แต่ฝูงซอมบี้กำลังเดินตัดหน้า",
+      best: ["distract"], ok: ["fight", "stealth", "command", "energy", "block"],
+      win: { infection: -10, panic: -6 }, part: { infection: -5, panic: -2 }, bare: { infection: 6, health: -4 }, fail: { infection: 10, health: -8, panic: 8 },
+      winText: "ฝูงซอมบี้หันไปตามสิ่งล่อ เปิดช่องว่างให้ทีมวิ่งตัดลานไปได้",
+      partText: "ฝ่าไปได้ครึ่งทาง มีซอมบี้บางตัวยังไล่ตามอยู่ห่าง ๆ",
+      bareText: "ทุกคนก้มตัววิ่งเลาะขอบลาน มีซอมบี้เฉียดผ่านไปแค่เอื้อม",
+      failText: "ลังเลนานเกินไป ฝูงซอมบี้ปิดทางจนต้องฝ่าออกไปแบบเสี่ยงตาย" },
+  },
+  forest: {
+    3: { icon: "waves", title: "หมอกลงหนาจนมองไม่เห็นกัน!", desc: "เสียงเพื่อนเริ่มห่างออกไปในหมอก ถ้าแยกกันตอนนี้อาจไม่ได้เจอกันอีก",
+      best: ["navigate", "command"], ok: ["light", "calm", "energy", "cut"],
+      win: { panic: -10, infection: -6 }, part: { panic: -5, infection: -2 }, bare: { panic: 6, infection: 4 }, fail: { panic: 12, infection: 8, health: -6 },
+      winText: "ทีมกลับมารวมกลุ่มได้ครบ และยังรู้ทิศที่ต้องเดินต่อ",
+      partText: "รวมกลุ่มได้ แต่หลงทิศไปช่วงหนึ่งกว่าจะหาทางเดิมเจอ",
+      bareText: "ทุกคนตะโกนเรียกชื่อกันไปมาจนเสียงแหบ กว่าจะมารวมกันได้",
+      failText: "หมอกกลืนเสียงทุกอย่าง ทีมแยกกันอยู่นานจนทุกคนขวัญเสีย" },
+    6: { icon: "heart-pulse", title: "เพื่อนลื่นล้ม ข้อเท้าแพลง!", desc: "ทางลงเขายังอีกไกล และฟ้ากำลังจะมืด",
+      best: ["heal"], ok: ["energy", "calm", "navigate", "cut"],
+      win: { health: 12, panic: -6 }, part: { health: 5, panic: -3 }, bare: { health: -4, infection: 5 }, fail: { health: -10, infection: 8, panic: 6 },
+      winText: "พันข้อเท้าได้แน่นหนา เพื่อนเดินต่อได้เองโดยไม่ต้องมีคนพยุง",
+      partText: "อาการดีขึ้นบ้าง แต่ทีมต้องเดินช้าลงเพื่อรอเพื่อน",
+      bareText: "ผลัดกันพยุงเพื่อนลงเขา ทุกคนหมดแรงกว่าที่ควรจะเป็น",
+      failText: "อาการแย่ลงเรื่อย ๆ ทีมต้องหยุดกลางทางทั้งที่ฟ้ามืดลงแล้ว" },
+    9: { icon: "audio-lines", title: "เสียงเรียกชื่อลอยมาจากในป่า!", desc: "เสียงนั้นเหมือนเสียงคนที่ทุกคนรู้จัก มีคนเริ่มจะเดินออกไปหา",
+      best: ["calm"], ok: ["light", "command", "stealth", "block"],
+      win: { panic: -12, infection: -6 }, part: { panic: -5, infection: -3 }, bare: { panic: 6, infection: 5 }, fail: { panic: 12, infection: 8, health: -6 },
+      winText: "ทุกคนตั้งสติได้ ไม่มีใครขานรับเสียงเรียกนั้น แล้วเสียงก็เงียบหายไป",
+      partText: "ดึงเพื่อนกลับมาได้ แต่เสียงเรียกยังวนเวียนอยู่ในหัวทุกคน",
+      bareText: "ต้องคว้าแขนเพื่อนไว้แน่น กว่าจะดึงกลับมาได้ทุกคนตัวสั่นไปหมด",
+      failText: "มีคนเกือบขานรับเสียงนั้น ความกลัวแผ่ไปทั่วทั้งทีม" },
+  },
+};
+const HAZ_WRONG_FX = { panic: 2 };
+const hazardFor = (n) => (HAZARDS[isForest() ? "forest" : "zombie"] || {})[n] || null;
+// best = ได้ผลเต็มที่ · ok = พอช่วยได้ · wrong = ไม่ได้ผล
+const hazardMatch = (hz, id) => { const tags = ITEM_DB[id].tags; return tags.some((t) => hz.best.includes(t)) ? "win" : tags.some((t) => hz.ok.includes(t)) ? "part" : "wrong"; };
+const HAZ_RESULT = {
+  win: { label: "ได้ผลเต็มที่!", color: "var(--green)" },
+  part: { label: "พอช่วยได้", color: "var(--amber)" },
+  wrong: { label: "ไม่ได้ผล · เสียของเปล่า", color: "var(--red)" },
+  bare: { label: "รับมือด้วยมือเปล่า", color: "var(--amber)" },
+  ally: { label: "เพื่อนมาช่วยไว้!", color: "var(--green)" },
+  timeout: { label: "ไม่ทันตั้งตัว!", color: "var(--red)" },
+};
+
+function HazardPanel({ hz, left, inventory, allyReady, wide, onPick }) {
+  const r = hz.result;
+  const pickedItem = r && r.itemId ? ITEM_DB[r.itemId] : null;
+  const btnBase = "cut flex items-start gap-3 p-3 text-left min-w-0 border";
+  return (
+    <motion.section id="hazard-panel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative border p-3 sm:p-4 flex flex-col gap-3 overflow-hidden"
+      style={{ borderColor: "var(--amber)", background: "rgba(36,24,8,.92)", boxShadow: "0 0 32px -8px rgba(242,163,58,.75)" }}>
+      <div className="flex items-center gap-3">
+        <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--amber)" }}><Icon name="backpack" size={13} />Item crisis · เลือกของในเป้ภายใน {HAZ_MS / 1000} วินาที</span>
+        <span className="ml-auto f-mono text-sm tabular-nums" style={{ color: r ? "var(--dim)" : left < 3000 ? "var(--red)" : "var(--amber)" }}>{r ? (r.rt != null ? r.rt.toFixed(1) + "s" : "หมดเวลา") : (left / 1000).toFixed(1) + "s"}</span>
+      </div>
+      <div className="h-2" style={{ background: "#2a1d08" }}>
+        <div className="h-full" style={{ width: (r ? 0 : (left / HAZ_MS) * 100) + "%", background: left < 3000 ? "var(--red)" : "var(--amber)", transition: "width 50ms linear" }} />
+      </div>
+      <div className="flex items-start gap-3">
+        <motion.span className="shrink-0 w-11 h-11 flex items-center justify-center border" style={{ borderColor: "var(--red)", color: "var(--red)", background: "rgba(229,55,44,.12)" }}
+          animate={r ? {} : { scale: [1, 1.08, 1] }} transition={{ duration: 0.8, repeat: Infinity }}><Icon name={hz.icon} size={22} /></motion.span>
+        <div className="min-w-0 flex flex-col gap-1">
+          <h3 className="f-display font-bold text-lg sm:text-xl leading-snug">{hz.title}</h3>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--dim)" }}>{hz.desc}</p>
+          <p className="text-xs inline-flex flex-wrap items-center gap-1.5 mt-0.5">
+            <span style={{ color: "var(--dim)" }}>ของที่ช่วยได้มากที่สุดต้องมี:</span>
+            {hz.best.map((t) => <span key={t} className="px-1.5 py-0.5 border f-display font-semibold" style={{ borderColor: "var(--green)", color: "var(--green)" }}>{TAG_LABEL[t]}</span>)}
+          </p>
+        </div>
+      </div>
+
+      {!r ? (
+        <div className={"grid gap-2 " + (wide ? "grid-cols-3" : "grid-cols-2")}>
+          {inventory.map((it) => (
+            <motion.button key={it.id} id={"haz-" + it.id} onClick={() => onPick({ kind: "item", id: it.id })} whileTap={{ scale: 0.96 }} className={btnBase}
+              style={{ background: "#2c2010", borderColor: "rgba(242,163,58,.55)", color: "var(--bone)" }}>
+              <span className="shrink-0 mt-0.5" style={{ color: "var(--amber)" }}><Icon name={it.icon} size={20} /></span>
+              <span className="flex flex-col gap-1 min-w-0">
+                <span className="f-display font-bold text-sm leading-snug">{it.name}</span>
+                <span className="flex flex-wrap gap-1">{ITEM_DB[it.id].tags.map((t) => <span key={t} className="text-[10px] px-1 border" style={{ borderColor: hz.best.includes(t) ? "var(--green)" : "var(--line)", color: hz.best.includes(t) ? "var(--green)" : "var(--dim)" }}>{TAG_LABEL[t]}</span>)}</span>
+                <span className="text-[10px] f-mono" style={{ color: "var(--dim)" }}>เหลือ {it.charges}/{it.max}{it.sig ? " · ประจำตัว" : ""}</span>
+              </span>
+            </motion.button>
+          ))}
+          <motion.button id="haz-ally" disabled={!allyReady} onClick={() => allyReady && onPick({ kind: "ally" })} whileTap={allyReady ? { scale: 0.96 } : {}} className={btnBase}
+            style={{ background: allyReady ? "rgba(132,166,90,.16)" : "#1b1a17", borderColor: allyReady ? "var(--green)" : "var(--line)", color: allyReady ? "var(--bone)" : "var(--dim)", cursor: allyReady ? "pointer" : "not-allowed" }}>
+            <span className="shrink-0 mt-0.5" style={{ color: allyReady ? "var(--green)" : "var(--dim)" }}><Icon name={allyReady ? "hand-heart" : "lock"} size={20} /></span>
+            <span className="flex flex-col gap-0.5 min-w-0">
+              <span className="f-display font-bold text-sm leading-snug">{allyReady ? "เรียกเพื่อนที่คุณเคยช่วยไว้" : "ความช่วยเหลือจากเพื่อน"}</span>
+              <span className="text-[11px] leading-snug">{allyReady ? "ได้ผลเต็มที่ ไม่เสียของ · ใช้ได้ครั้งเดียว" : "ยังไม่มีใครติดหนี้บุญคุณ ลองแบ่งของให้เพื่อนที่ต้องการดูสิ"}</span>
+            </span>
+          </motion.button>
+          <motion.button id="haz-bare" onClick={() => onPick({ kind: "bare" })} whileTap={{ scale: 0.96 }} className={btnBase}
+            style={{ background: "#211915", borderColor: "var(--line)", color: "var(--bone)" }}>
+            <span className="shrink-0 mt-0.5" style={{ color: "var(--dim)" }}><Icon name="shield-half" size={20} /></span>
+            <span className="flex flex-col gap-0.5 min-w-0">
+              <span className="f-display font-bold text-sm leading-snug">ใช้มือเปล่า</span>
+              <span className="text-[11px] leading-snug" style={{ color: "var(--dim)" }}>เก็บของไว้ แต่ทีมต้องรับผลเสีย</span>
+            </span>
+          </motion.button>
+        </div>
+      ) : (
+        <div className="relative flex flex-col sm:flex-row items-center gap-4 py-2">
+          <div className="relative shrink-0 w-24 h-24 flex items-center justify-center">
+            {[0, 1, 2].map((k) => (
+              <motion.span key={k} className="absolute inset-0 rounded-full border-2" style={{ borderColor: HAZ_RESULT[r.outcome].color }}
+                initial={{ scale: 0.4, opacity: 0.9 }} animate={{ scale: 1.6, opacity: 0 }} transition={{ duration: 1.1, delay: k * 0.18, ease: "easeOut" }} />
+            ))}
+            <motion.span className="w-20 h-20 rounded-full flex items-center justify-center" style={{ background: HAZ_RESULT[r.outcome].color, color: "#111311", boxShadow: "0 0 30px " + HAZ_RESULT[r.outcome].color }}
+              initial={{ scale: 0, rotate: -40 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 260, damping: 14 }}>
+              <Icon name={pickedItem ? pickedItem.icon : r.outcome === "ally" ? "hand-heart" : r.outcome === "timeout" ? "triangle-alert" : "shield-half"} size={36} />
+            </motion.span>
+          </div>
+          <div className="flex flex-col gap-1 min-w-0 text-center sm:text-left">
+            <motion.span initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="f-display font-bold text-xl sm:text-2xl" style={{ color: HAZ_RESULT[r.outcome].color }}>
+              {pickedItem ? pickedItem.verb + " · " : ""}{HAZ_RESULT[r.outcome].label}
+            </motion.span>
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} className="text-sm sm:text-base leading-relaxed">{r.story}</motion.p>
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="f-mono text-xs" style={{ color: "var(--dim)" }}>{fxText(r.fx) || "ไม่มีผลต่อสถานะทีม"}</motion.p>
+          </div>
+        </div>
+      )}
+      <p className="text-[11px]" style={{ color: "var(--dim)" }}>ดูป้ายความสามารถของไอเทมให้ตรงกับสิ่งที่ต้องการ · ไม่ตอบภายใน {HAZ_MS / 1000} วินาที = ไม่ทันตั้งตัว · ส่วนนี้ไม่มีผลกับคะแนน MBTI</p>
+    </motion.section>
+  );
+}
+
 /* ========================= Behavioral Telemetry Engine =========================
    เก็บระหว่างเล่น (ต่อข้อ): latency (วินาทีตั้งแต่ตัวเลือกพร้อมจนกดยืนยัน), switches (เปลี่ยนตัวเลือกก่อนยืนยัน),
    hovers (ชี้เมาส์ผ่านตัวเลือก · PC เท่านั้น), hints (คำใบ้ Tactical Radar ที่ขึ้น), panicAt (Panic ตอนตัดสินใจ),
@@ -7469,11 +7621,22 @@ const ENDING_OUTCOMES = [
   { en: "BARELY ALIVE", th: "รอดอย่างหวุดหวิด", color: "#e5372c", sfx: "heartbeat" },
 ];
 const outcomeOf = (meters) => { const h = (meters && meters.health) || 0; return h >= 60 ? 0 : h >= 30 ? 1 : 2; };
-function endingLines(outcome, char) {
+// บรรทัดที่เล่าถึงไอเทมของผู้เล่น (แทนบรรทัด "มองกลับไปที่ตึก 6" เมื่อมีเรื่องให้เล่า)
+function itemEndingLine(result, char) {
+  const tl = result.telemetry || {}, items = tl.items || [], hz = tl.hazards || [];
+  const sig = ITEM_DB[SIGNATURE[char.id]];
+  if (hz.some((e) => e.outcome === "ally")) return "เพื่อนที่คุณเคยแบ่งของให้ กลับมาช่วยคุณในวินาทีที่สำคัญที่สุด";
+  if (hz.filter((e) => e.outcome === "win").length >= 2) return "ทุกครั้งที่วิกฤต คุณหยิบของถูกชิ้นได้ทันเวลา… ทีมรอดมาได้เพราะเรื่องนั้น";
+  if (items.some((e) => e.type === "gift")) return "เพื่อน ๆ ยังจำได้ว่าคุณเคยแบ่งของให้ ในตอนที่ทุกคนต้องการที่สุด";
+  if (sig && !items.some((e) => e.sig && (e.type === "use" || e.type === "gift"))) return sig.name + "ยังอยู่ในเป้ของ" + char.name + "… ไม่ได้ถูกใช้เลยสักครั้ง";
+  return null;
+}
+function endingLines(outcome, char, result) {
+  const itemLine = result ? itemEndingLine(result, char) : null;
   return [
     { at: 600, text: "รถทหารพุ่งผ่านประตูรั้ว ทิ้งโรงเรียนที่ลุกเป็นไฟไว้ข้างหลัง", sfx: "zgrowl" },
     { at: 3300, text: ["ฟ้าเริ่มสาง… เสียงคำรามค่อย ๆ จางหายไปไกล", "ทุกคนบาดเจ็บและเหนื่อยล้า แต่ยังหายใจอยู่", "มือของพวกมันเกือบคว้าท้ายรถได้… คุณรอดมาอย่างหวุดหวิด"][outcome], sfx: "heartbeat" },
-    { at: 6000, text: char.name + " มองกลับไปที่ตึก 6 เป็นครั้งสุดท้าย" },
+    { at: 6000, text: itemLine || char.name + " มองกลับไปที่ตึก 6 เป็นครั้งสุดท้าย" },
     { at: 8600, text: "ทุกการตัดสินใจเมื่อคืนนี้… บอกอะไรบางอย่างเกี่ยวกับตัวคุณ", sfx: "glitch" },
   ];
 }
@@ -7528,7 +7691,7 @@ function EndingScreen({ result, charId, forest = false, onDone }) {
   const char = charById(charId);
   const outcome = outcomeOf(result.meters);
   const oc = ENDING_OUTCOMES[outcome];
-  const lines = useMemo(() => endingLines(outcome, char), [outcome]);
+  const lines = useMemo(() => endingLines(outcome, char, result), [outcome, result]);
   const tm = useMemo(() => { try { return analyzeTelemetry(result.telemetry); } catch (e) { return null; } }, [result]);
   const [phase, setPhase] = useState(forest ? "analyse" : "story");
   const [line, setLine] = useState(-1);
@@ -7797,6 +7960,8 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const [armed, setArmed] = useState(null);          // { id, mode: "use" | "gift" } ใช้ร่วมกับคำตอบข้อนี้
   const [qte, setQte] = useState(null);              // { title, start, result }
   const [qteLeft, setQteLeft] = useState(QTE_MS);
+  const [hazard, setHazard] = useState(null);        // { ...HAZARDS[n], start, result }
+  const [hazLeft, setHazLeft] = useState(HAZ_MS);
   const [hitKey, setHitKey] = useState(0);
   const [interlude, setInterlude] = useState(null);  // ฉากเล่าเรื่องคั่นระหว่างข้อ { k, art, beat, sub }
   const editor = useIsEditor();                       // เจ้าของ/ผู้แก้ไข: ข้ามข้อ · กระโดดไปข้อ/ฉากคั่นใดก็ได้
@@ -7810,7 +7975,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const [sel, setSel] = useState(null);       // ตัวเลือกที่เลือกไว้แต่ยังไม่ยืนยัน
   const [hint, setHint] = useState(null);     // Micro-hint (Tactical Radar)
   const [probe, setProbe] = useState(null);   // การสแกนความจำ (Working Memory)
-  const tele = useRef({ questions: [], probes: [], items: [], qte: [] });
+  const tele = useRef({ questions: [], probes: [], items: [], qte: [], hazards: [] });
   const cur = useRef({ start: null, switches: 0, hovers: 0, hints: 0, kinds: {}, lastHover: null });
   const fineHover = useRef((() => { try { return window.matchMedia("(hover: hover) and (pointer: fine)").matches; } catch (e) { return false; } })()).current;
 
@@ -7845,7 +8010,58 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     if (handled.current.has(qi)) return;
     handled.current.add(qi);
     if (!isForest() && QTE_AT[q.n] && !tele.current.qte.some((e) => e.qi === qi)) { startQte(); return; }
+    if (hazardFor(q.n) && !tele.current.hazards.some((e) => e.qi === qi)) { startHazard(); return; }
     startNarrate();
+  };
+  // ---- Item Crisis ----
+  const allyReady = tele.current.items.some((e) => e.type === "gift") && !tele.current.hazards.some((e) => e.outcome === "ally");
+  const startHazard = () => {
+    token.current++;
+    const start = performance.now();
+    setHazard({ ...hazardFor(q.n), start, result: null });
+    setHazLeft(HAZ_MS);
+    setPhase("hazard");
+    AUDIO.play("alert"); AUDIO.play("glitch");
+    for (let t = 1000; t < HAZ_MS; t += 1000) later(() => AUDIO.play(t >= HAZ_MS - 3000 ? "heartbeat" : "type"), t);
+    later(() => resolveHazard(null, start), HAZ_MS);
+  };
+  useEffect(() => {
+    if (phase !== "hazard" || !hazard || hazard.result) return;
+    const id = setInterval(() => setHazLeft(Math.max(0, HAZ_MS - (performance.now() - hazard.start))), 50);
+    return () => clearInterval(id);
+  }, [phase, hazard]);
+  const hazDone = useRef(-1);
+  const resolveHazard = (pick, start) => {
+    if (hazDone.current === qi) return;
+    const hz = hazardFor(q.n); if (!hz) return;
+    hazDone.current = qi;
+    clearAll();
+    const rt = pick ? Math.round(((performance.now() - start) / 1000) * 10) / 10 : null;
+    let outcome, fx, story, itemId = null;
+    let inv = inventory.map((x) => ({ ...x }));
+    if (!pick) { outcome = "timeout"; fx = hz.fail; story = hz.failText; }
+    else if (pick.kind === "ally") { outcome = "ally"; fx = hz.win; story = "เพื่อนที่คุณเคยแบ่งของให้รีบเข้ามาช่วยทันที " + hz.winText; }
+    else if (pick.kind === "bare") { outcome = "bare"; fx = hz.bare; story = hz.bareText; }
+    else {
+      const it = inv.find((x) => x.id === pick.id);
+      itemId = pick.id;
+      outcome = it ? hazardMatch(hz, pick.id) : "wrong";
+      fx = outcome === "win" ? hz.win : outcome === "part" ? hz.part : HAZ_WRONG_FX;
+      story = outcome === "win" ? hz.winText : outcome === "part" ? hz.partText : "แต่" + (it ? it.name : "ของชิ้นนี้") + "ไม่เหมาะกับสถานการณ์นี้เลย ทีมต้องรีบแก้ปัญหากันเอง";
+      if (it) {
+        it.charges -= 1; if (it.charges <= 0) inv = inv.filter((x) => x.id !== it.id);
+        tele.current.items = [...tele.current.items, { type: "use", id: it.id, sig: it.sig, matched: outcome !== "wrong", critical: CRITICAL(meters), hazard: true, qi, n: q.n }];
+        setInventory(inv);
+      }
+    }
+    const hadBest = inventory.some((x) => hazardMatch(hz, x.id) === "win");
+    tele.current.hazards = [...tele.current.hazards.filter((e) => e.qi !== qi), { qi, n: q.n, outcome, itemId, rt, hadBest, panicAt: meters.panic }];
+    setMeters((m) => ({ health: clamp(m.health + (fx.health || 0), 5), infection: clamp(m.infection + (fx.infection || 0)), panic: clamp(m.panic + (fx.panic || 0)) }));
+    const k = Date.now();
+    setDeltas({ health: fx.health ? { v: fx.health, k } : null, infection: fx.infection ? { v: fx.infection, k } : null, panic: fx.panic ? { v: fx.panic, k } : null });
+    if (outcome === "timeout" || outcome === "wrong" || (fx.health || 0) <= -4) { setHitKey((h) => h + 1); AUDIO.play("hit"); } else { AUDIO.play("item"); later(() => AUDIO.play("select"), 180); }
+    setHazard((cur) => (cur ? { ...cur, result: { outcome, fx, story, itemId, rt } } : cur));
+    later(() => { setHazard(null); setDeltas({}); startNarrate(); }, 3400);
   };
   // ---- Zombie encounter QTE ----
   const qteActions = (() => {
@@ -7927,7 +8143,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
       snaps.current = snaps.current.slice(0, qi);
       tele.current.questions = tele.current.questions.slice(0, qi);
       tele.current.probes = tele.current.probes.filter((p) => p.qi < qi);
-      tele.current.items = tele.current.items.filter((e) => e.qi < qi || (e.qi === qi && e.qte));
+      tele.current.items = tele.current.items.filter((e) => e.qi < qi || (e.qi === qi && (e.qte || e.hazard)));
       setProbe(null); setSel(null); setHint(null); setArmed(null); setItemFocus(null); setLastFx(null); setQte(null);
       handled.current.delete(qi); handled.current.delete("r" + qi);
       setScores(sn.scores); setMeters(sn.meters); setInventory(sn.inventory); setHistory(sn.history);
@@ -7942,8 +8158,9 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     snaps.current = snaps.current.slice(0, prev);
     tele.current.questions = tele.current.questions.slice(0, prev);
     tele.current.probes = tele.current.probes.filter((p) => p.qi < prev);
-    tele.current.items = tele.current.items.filter((e) => e.qi < prev || (e.qi === prev && e.qte));
+    tele.current.items = tele.current.items.filter((e) => e.qi < prev || (e.qi === prev && (e.qte || e.hazard)));
     tele.current.qte = tele.current.qte.filter((e) => e.qi <= prev);
+    tele.current.hazards = tele.current.hazards.filter((e) => e.qi <= prev);
     qteDone.current = -1;
     setProbe(null); setSel(null); setHint(null); setArmed(null); setItemFocus(null); setLastFx(null); setQte(null);
     handled.current.delete(prev); handled.current.delete("r" + prev); handled.current.delete(qi); handled.current.delete("r" + qi);
@@ -8153,7 +8370,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   // ---- Editor tools ----
   const edReset = () => {
     token.current++; clearAll();
-    setInterlude(null); setProbe(null); setQte(null); setPicked(null); setSel(null); setHint(null); setArmed(null); setItemFocus(null); setItemNote(null); setLastFx(null); setTyped(""); setDeltas({});
+    setInterlude(null); setProbe(null); setQte(null); setHazard(null); setPicked(null); setSel(null); setHint(null); setArmed(null); setItemFocus(null); setItemNote(null); setLastFx(null); setTyped(""); setDeltas({});
   };
   const edJump = (i) => {
     edReset();
@@ -8164,7 +8381,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const edFinish = () => {
     edReset();
     onComplete({ scores: scoresRef.current, meters: metersRef.current, inventory: invRef.current, history: histRef.current,
-      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
+      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
   };
   const edSkip = () => (qi < questions.length - 1 ? edJump(qi + 1) : edFinish());
   const edInterlude = (k) => { edReset(); handled.current.add(k); handled.current.add("r" + k); handled.current.add("i" + k); setPendingIl(k); if (k !== qi) setQi(k); };
@@ -8186,7 +8403,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     if (isForest() && FOREST_INTERLUDES[qi] && !handled.current.has("i" + qi)) { handled.current.add("i" + qi); startInterlude(qi); return; }
     if (qi < questions.length - 1) { setPicked(null); setTyped(""); setItemNote(null); setLastFx(null); setQi(qi + 1); setPhase("enter"); }
     else onComplete({ scores: scoresRef.current, meters: metersRef.current, inventory: invRef.current, history: histRef.current,
-      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
+      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
   };
   // refs เพื่อส่งค่าล่าสุดตอนจบเกม
   const scoresRef = useRef(scores), metersRef = useRef(meters), invRef = useRef(inventory), histRef = useRef(history);
@@ -8452,9 +8669,11 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
             </div>
           </motion.div>
           {Belt}
-          {phase !== "probe" && phase !== "qte" && Dialogue}
+          {phase !== "probe" && phase !== "qte" && phase !== "hazard" && Dialogue}
 
-          {phase === "qte" && qte ? (
+          {phase === "hazard" && hazard ? (
+            <HazardPanel key={"haz" + qi} hz={hazard} left={hazLeft} inventory={inventory} allyReady={allyReady} wide={wide} onPick={(pk) => resolveHazard(pk, hazard.start)} />
+          ) : phase === "qte" && qte ? (
             <motion.section id="qte-panel" key={"qte" + qi} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-3 sm:p-4 flex flex-col gap-3"
               style={{ borderColor: "var(--red)", background: "rgba(40,10,8,.9)", boxShadow: "0 0 30px -8px rgba(229,55,44,.8)" }}>
               <div className="flex items-center gap-3">
@@ -8973,7 +9192,13 @@ function buildAIPayload({ result, char, type, tm }) {
       stress_reflex: tm.stressReflex, qte_timeouts: tm.qteTimeouts,
       memory_probe: tm.probes && tm.probes.length ? tm.probeCorrect + "/" + tm.probes.length : null,
     },
-    item_strategy: st ? st.t : null,
+    item_strategy: (() => {
+      const hz = (result.telemetry && result.telemetry.hazards) || [];
+      const base = st ? st.t : "";
+      if (!hz.length) return base || null;
+      const good = hz.filter((e) => e.outcome === "win" || e.outcome === "ally").length;
+      return (base ? base + " · " : "") + "วิกฤตไอเทม: แก้ได้เต็มที่ " + good + "/" + hz.length;
+    })(),
     rule_based_barriers: (tm.barriers || []).map((b) => b.title),
     decisions,
   };
@@ -9689,6 +9914,30 @@ function ResultScreen({ device, charId, result, onRestart }) {
                     </div>
                   ))}
                 </div>
+                {(() => {
+                  const hzl = (result.telemetry && result.telemetry.hazards) || [];
+                  if (!hzl.length) return null;
+                  const scen = isForest() ? "forest" : "zombie";
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <Sub icon="siren">วิกฤตไอเทม · คุณแก้สถานการณ์ฉุกเฉินอย่างไร</Sub>
+                      <div className={"grid gap-2 " + (wide ? "grid-cols-3" : "grid-cols-1")}>
+                        {hzl.map((h) => {
+                          const def = (HAZARDS[scen] || {})[h.n] || {};
+                          const res = HAZ_RESULT[h.outcome] || HAZ_RESULT.bare;
+                          const itn = h.itemId && ITEM_DB[h.itemId] ? ITEM_DB[h.itemId].name : h.outcome === "ally" ? "เพื่อนมาช่วย" : h.outcome === "bare" ? "มือเปล่า" : "—";
+                          return (
+                            <div key={h.qi} className="p-3 flex flex-col gap-1 border-l-2 min-w-0" style={{ background: "var(--panel-2)", borderColor: res.color }}>
+                              <span className="text-xs" style={{ color: "var(--dim)" }}>ก่อนข้อ {h.n} · {def.title || "เหตุฉุกเฉิน"}</span>
+                              <span className="f-display font-semibold text-sm">{itn}</span>
+                              <span className="text-xs" style={{ color: res.color }}>{res.label}{h.rt != null ? " · " + h.rt + " วิ" : ""}{h.outcome !== "win" && h.outcome !== "ally" && h.hadBest ? " · มีของที่เหมาะกว่าในเป้" : ""}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className={"grid gap-4 " + two}>
                   {[["Resource Management", "การบริหารทรัพยากร", it.rm, "สูงเมื่อใช้ไอเทมตรงสถานการณ์และเก็บไว้ใช้ยามวิกฤต ลดลงเมื่อใช้ไม่ตรงจังหวะ ใช้หมดเร็ว หรือมีตัวช่วยแต่ไม่ใช้"],
                     ["Altruistic Item Usage", "การแบ่งปันเพื่อผู้อื่น", it.altruism, "สูงเมื่อมอบหรือใช้ไอเทมช่วยเพื่อนในข้อที่มีคนต้องการความช่วยเหลือ (สละไอเทมประจำตัวได้คะแนนเพิ่ม)"]].map(([en, th, v, how]) => {
