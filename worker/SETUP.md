@@ -77,9 +77,14 @@
 3. เลือก **GitHub** แล้วอนุญาตให้ Cloudflare เข้าถึง repository `survimind/survimind`
 4. ตั้งค่าดังนี้
    - Branch: `main`
-   - Root directory (Path): `/worker`
+   - Root directory (Path): `/` หรือ `/worker` ก็ได้ (มีไฟล์ wrangler.jsonc ทั้งสองที่)
    - Build command: เว้นว่าง
    - Deploy command: `npx wrangler deploy`
 5. กด **Connect** แล้วรอ build แรกเสร็จ (เครื่องหมายถูกสีเขียว)
 
 API key ไม่หาย เพราะเก็บเป็น Secret ใน Cloudflare แยกจากโค้ด
+
+
+## ถ้าเปิดลิงก์ Worker แล้วเห็นหน้าเกม
+
+แปลว่า Cloudflare deploy ไฟล์เกมทับตัวกลาง ให้ตรวจว่ามีไฟล์ `wrangler.jsonc` ที่โฟลเดอร์หลักของ repository แล้วกด **Retry deployment** ในแท็บ Deployments

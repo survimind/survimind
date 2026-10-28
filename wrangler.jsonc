@@ -1,0 +1,9 @@
+// ตั้งค่า Cloudflare Worker "survimind-ai" (ตัวกลางเรียก Google Gemini)
+// ไฟล์นี้ทำให้ Cloudflare deploy โค้ดใน worker/worker.js ถูกต้อง ไม่ว่าจะตั้ง Root directory เป็น / หรือ /worker
+// ห้ามเปลี่ยน name · ห้ามใส่ API key ในไฟล์นี้ (key เก็บเป็น Secret ใน Cloudflare)
+{
+  "name": "survimind-ai",
+  "main": "worker/worker.js",
+  "compatibility_date": "2026-06-01",
+  "keep_vars": true
+}
