@@ -3780,9 +3780,10 @@ function ProfileScreen({ onDone, onBack, initial }) {
   const [gender, setGender] = useState(initial ? initial.gender : null);
   const [age, setAge] = useState(initial ? String(initial.age) : "");
   const [touched, setTouched] = useState(false);
+  const [consent, setConsent] = useState(!!initial);
   const ageNum = parseInt(age, 10);
   const ageOk = Number.isFinite(ageNum) && ageNum >= AGE_MIN && ageNum <= AGE_MAX;
-  const ok = gender && ageOk;
+  const ok = gender && ageOk && consent;
   const bump = (d) => { AUDIO.play("hover"); const n = Number.isFinite(ageNum) ? ageNum + d : 15; setAge(String(clamp(n, AGE_MIN, AGE_MAX))); };
   const submit = (e) => {
     e.preventDefault(); setTouched(true);
@@ -3803,6 +3804,12 @@ function ProfileScreen({ onDone, onBack, initial }) {
             <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="clipboard-list" size={12} />Survivor registration</span>
             <h2 className="f-display font-bold text-2xl sm:text-3xl">ก่อนเข้าห้อง 602</h2>
             <p className="text-sm" style={{ color: "var(--dim)" }}>ระบุเพศและอายุของคุณ เพื่อใช้สรุปผลภาพรวมของผู้ทำแบบทดสอบ ไม่มีการเก็บชื่อ</p>
+          </div>
+
+          {/* คำเตือนเนื้อหา */}
+          <div id="content-warning" className="flex gap-3 p-3 border-l-2 text-sm leading-relaxed" style={{ borderColor: "var(--red)", background: "rgba(229,55,44,.08)" }}>
+            <span className="shrink-0 mt-0.5" style={{ color: "var(--red)" }}><Icon name="triangle-alert" size={16} /></span>
+            <span><b style={{ color: "var(--red)" }}>คำเตือนเนื้อหา</b> · สถานการณ์ "โรงเรียนซอมบี้" มีฉากความรุนแรงและเลือดแบบการ์ตูน และมีเสียงกรีดร้อง ถ้ารู้สึกไม่สบายใจ เลือกสถานการณ์ "หลงป่า" แทนได้ และหยุดเล่นได้ทุกเมื่อ</span>
           </div>
 
           <fieldset className="flex flex-col gap-2">
@@ -3837,7 +3844,23 @@ function ProfileScreen({ onDone, onBack, initial }) {
             {touched && !ageOk && <p className="text-xs" style={{ color: "var(--red)" }}>ใส่อายุเป็นตัวเลขระหว่าง {AGE_MIN}–{AGE_MAX} ปี</p>}
           </div>
 
-          {!ok && <p className="text-xs -mb-3" style={{ color: "var(--dim)" }}>ต้องเลือกเพศและใส่อายุให้ครบก่อน จึงจะไปหน้าถัดไปได้</p>}
+          {/* ความยินยอม PDPA */}
+          <div className="flex flex-col gap-2">
+            <button type="button" id="consent-check" role="checkbox" aria-checked={consent} onClick={() => { AUDIO.play("click"); setConsent((c) => !c); }}
+              className="flex items-start gap-3 p-3 text-left text-sm leading-relaxed border"
+              style={{ borderColor: consent ? "var(--green)" : touched && !consent ? "var(--red)" : "var(--line)", background: consent ? "rgba(132,166,90,.08)" : "transparent" }}>
+              <span className="shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center border" style={{ borderColor: consent ? "var(--green)" : "var(--dim)", background: consent ? "var(--green)" : "transparent", color: "#111311" }}>{consent ? <Icon name="check" size={14} /> : null}</span>
+              <span>ฉันยินยอมให้เก็บ <b>เพศ อายุ และพฤติกรรมการเล่น</b> (ตัวเลือกที่เลือก เวลาตัดสินใจ) เพื่อวิเคราะห์ผลของฉันและสรุปภาพรวมแบบไม่ระบุตัวตน</span>
+            </button>
+            <ul className="text-xs leading-relaxed flex flex-col gap-1 pl-1" style={{ color: "var(--dim)" }}>
+              <li>• ใช้เพื่อการศึกษาในรายวิชา USC10967 เท่านั้น ไม่ขายหรือเปิดเผยต่อบุคคลอื่น</li>
+              <li>• ชื่อหรือรหัสนักศึกษาจะถูกเก็บเฉพาะเมื่อคุณกรอกเองตอนบันทึกภาพผลลัพธ์</li>
+              <li>• ผลวิเคราะห์ AI ประมวลผลโดย Google Gemini โดยส่งเฉพาะคะแนนและพฤติกรรมการเล่น ไม่ส่งเพศ อายุ หรือชื่อ</li>
+            </ul>
+            {touched && !consent && <p className="text-xs" style={{ color: "var(--red)" }}>ต้องกดยินยอมก่อนเริ่มเล่น</p>}
+          </div>
+
+          {!ok && <p className="text-xs -mb-3" style={{ color: "var(--dim)" }}>ต้องเลือกเพศ ใส่อายุ และกดยินยอมให้ครบก่อน จึงจะไปหน้าถัดไปได้</p>}
           <button type="submit" id="profile-submit" disabled={!ok} aria-disabled={!ok}
             className="cut f-display font-semibold uppercase tracking-wider inline-flex items-center justify-center gap-2 px-6 py-3"
             style={{ background: ok ? "var(--amber)" : "var(--panel-2)", color: ok ? "#111311" : "var(--dim)", boxShadow: ok ? "0 0 26px -6px var(--amber)" : "none", transition: "background .2s", cursor: ok ? "pointer" : "not-allowed" }}>
@@ -4140,12 +4163,17 @@ function SplashNoise() {
   return <canvas ref={ref} className="sv-noise" aria-hidden="true" />;
 }
 
-function SplashScreen({ onPlay }) {
-  const [ready, setReady] = useState(false);
-  const [done, setDone] = useState(false);   // ข้ามอินโทรแล้ว
+function SplashScreen({ onPlay, onData, instant = false }) {
+  // instant = กลับมาหน้าแรก (เล่นจบ/ย้อนกลับ) → แสดงชื่อเกมและปุ่มทันที ไม่เล่นอินโทรซ้ำ
+  const [ready, setReady] = useState(instant);
+  const [done, setDone] = useState(instant);   // ข้ามอินโทรแล้ว
+  const device = useDetectedDevice();
+  const [owner, setOwner] = useState(false);
+  useEffect(() => { let live = true; STORE.canSeeAll().then((v) => live && setOwner(!!v)).catch(() => {}); return () => { live = false; }; }, []);
   const [leaving, setLeaving] = useState(false);
   const letters = useMemo(() => SPLASH_TITLE.split("").map((c, i) => ({ c, i, dx: (Math.random() * 60 - 30).toFixed(0) + "px", dy: (Math.random() * 24 - 12).toFixed(0) + "px" })), []);
   useEffect(() => {
+    if (instant) return;
     // พยายามเล่นเสียงประกอบ (ดังเฉพาะเมื่อเบราว์เซอร์อนุญาต)
     AUDIO.unlock();
     const ids = [[150, "glitch"], [1300, "heartbeat"], [2050, "heartbeat"], [2750, "glitch"]].map(([ms, n]) => setTimeout(() => AUDIO.play(n), ms));
@@ -4184,7 +4212,12 @@ function SplashScreen({ onPlay }) {
         <div className="sv-slot">
           {ready && (<>
             <span className="sv-playwrap"><button id="splash-play" className="sv-play" onClick={play} autoFocus><Icon name="arrow-right" size={20} />เริ่มเล่น</button></span>
-            <span className="sv-hint"><Icon name="headphones" size={13} />แนะนำให้ใส่หูฟัง เกมนี้มีเสียง</span>
+            <span className="sv-hint"><Icon name={device === "pc" ? "monitor" : "smartphone"} size={13} />{device === "pc" ? "เล่นบนคอมพิวเตอร์" : "เล่นบนมือถือ"} · <Icon name="headphones" size={13} />แนะนำให้ใส่หูฟัง เกมนี้มีเสียง</span>
+            {owner && onData && (
+              <button id="open-data" onClick={() => { AUDIO.play("click"); onData(); }} className="sv-hint" style={{ border: "1px solid var(--line)", padding: "6px 12px", background: "rgba(17,19,17,.6)", cursor: "pointer" }}>
+                <Icon name="table" size={13} />ข้อมูลผู้ทำแบบทดสอบ (เจ้าของ)
+              </button>
+            )}
           </>)}
         </div>
       </div>
@@ -5312,6 +5345,7 @@ function SceneArt({ n, charId, phase = 0, mood = "idle", moods: introMoods = {} 
     case "fx8": body = <SceneForestInterlude8 beat={phase} />; break;
     case "fx9": body = <SceneForestInterlude9 beat={phase} />; break;
     case "fx10": body = <SceneForestEnding beat={phase} />; break;
+    case "end": body = <SceneEscape outcome={phase} />; break;
     default: body = null;
   }
   return (
@@ -7426,6 +7460,177 @@ function SceneGate({ fallen, actors }) {
   );
 }
 
+/* ========================= ฉากจบ (โรงเรียนซอมบี้) + หน้าจอ "กำลังวิเคราะห์ตัวตนของคุณ" =========================
+   ฉากจบเปลี่ยนตามพลังชีวิตตอนจบเกม: รอดชีวิต (≥60) · รอดแบบบาดเจ็บ (30–59) · รอดอย่างหวุดหวิด (<30)
+   สถานการณ์หลงป่ามีบทส่งท้ายในหน้าผลอยู่แล้ว จึงข้ามไปหน้าวิเคราะห์เลย */
+const ENDING_OUTCOMES = [
+  { en: "SURVIVED", th: "รอดชีวิต", color: "#84a65a", sfx: "select" },
+  { en: "SURVIVED", th: "รอดแบบบาดเจ็บ", color: "#f2a33a", sfx: "alert" },
+  { en: "BARELY ALIVE", th: "รอดอย่างหวุดหวิด", color: "#e5372c", sfx: "heartbeat" },
+];
+const outcomeOf = (meters) => { const h = (meters && meters.health) || 0; return h >= 60 ? 0 : h >= 30 ? 1 : 2; };
+function endingLines(outcome, char) {
+  return [
+    { at: 600, text: "รถทหารพุ่งผ่านประตูรั้ว ทิ้งโรงเรียนที่ลุกเป็นไฟไว้ข้างหลัง", sfx: "zgrowl" },
+    { at: 3300, text: ["ฟ้าเริ่มสาง… เสียงคำรามค่อย ๆ จางหายไปไกล", "ทุกคนบาดเจ็บและเหนื่อยล้า แต่ยังหายใจอยู่", "มือของพวกมันเกือบคว้าท้ายรถได้… คุณรอดมาอย่างหวุดหวิด"][outcome], sfx: "heartbeat" },
+    { at: 6000, text: char.name + " มองกลับไปที่ตึก 6 เป็นครั้งสุดท้าย" },
+    { at: 8600, text: "ทุกการตัดสินใจเมื่อคืนนี้… บอกอะไรบางอย่างเกี่ยวกับตัวคุณ", sfx: "glitch" },
+  ];
+}
+const ENDING_STORY_MS = 11800;
+
+/* ---------- ฉากหนี: รถทหารวิ่งออกจากโรงเรียน ซอมบี้ไล่ตามแล้วหลุดหายไป ---------- */
+function SceneEscape({ outcome = 0 }) {
+  const sky = outcome === 0 ? "url(#fx-dawn)" : outcome === 1 ? "url(#fx-dusk)" : "url(#fx-dusk-red)";
+  return (
+    <g>
+      <defs>
+        <linearGradient id="fx-dawn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#27304d" /><stop offset=".55" stopColor="#b9736a" /><stop offset="1" stopColor="#f3c27a" /></linearGradient>
+        <radialGradient id="fx-fireglow" cx="50%" cy="100%" r="60%"><stop offset="0" stopColor="#ff7a3a" stopOpacity=".85" /><stop offset="1" stopColor="#ff7a3a" stopOpacity="0" /></radialGradient>
+      </defs>
+      <rect width="1600" height="900" fill={sky} />
+      {outcome === 0 && <motion.circle cx="1250" cy="610" r="90" fill="#ffe2a0" opacity=".85" filter="url(#fx-blur-sm)" animate={{ cy: [640, 600] }} transition={{ duration: 12, ease: "easeOut" }} />}
+      {/* โรงเรียนไกล ๆ ที่ลุกเป็นไฟ */}
+      <g opacity=".95">
+        <rect x="40" y="330" width="420" height="290" fill="#1d1a24" />
+        <rect x="180" y="260" width="150" height="80" fill="#1d1a24" />
+        {Array.from({ length: 12 }, (_, i) => (
+          <motion.rect key={i} x={70 + (i % 6) * 64} y={370 + Math.floor(i / 6) * 110} width="36" height="54" fill={i % 4 === 1 ? "#e0843f" : "#2c2635"}
+            animate={i % 4 === 1 ? { opacity: [0.5, 1, 0.6] } : {}} transition={loopT(0.7 + i * 0.13)} />
+        ))}
+        <ellipse cx="250" cy="330" rx="260" ry="150" fill="url(#fx-fireglow)" />
+        <Smoke seed={131} count={8} y={180} h={160} color="#1a1620" opacity={0.45} speed={11} rise />
+      </g>
+      {/* รั้วที่พังและถนน */}
+      {Array.from({ length: 7 }, (_, i) => <rect key={i} x={20 + i * 70} y={500} width="10" height="130" fill="#1b1916" transform={i === 3 ? "rotate(-28 55 630)" : ""} />)}
+      <rect y="620" width="1600" height="280" fill="#24211c" />
+      <rect y="700" width="1600" height="90" fill="#2f2b25" />
+      <motion.path d="M-200 745 H1800" stroke="#c9b98a" strokeWidth="6" strokeDasharray="60 70" animate={{ strokeDashoffset: [0, 260] }} transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }} opacity=".55" />
+      {/* ซอมบี้ไล่ตามแต่ช้ากว่ารถ */}
+      {[[60, 830, 1], [190, 860, 1.15], [-60, 845, 1.05]].map(([x, y, sc], i) => (
+        <motion.g key={i} initial={{ x: 0, opacity: 1 }} animate={{ x: [0, 220, 300], opacity: [1, 1, 0.15] }} transition={{ duration: 10, delay: i * 0.25, ease: "easeOut" }}>
+          <Zombie x={x} y={y} s={sc} walk delay={i * 0.2} />
+        </motion.g>
+      ))}
+      {/* รถทหารวิ่งออกไปทางขวา (ไฟส่องด้านหลังส่องไปที่ฝูงซอมบี้) */}
+      <motion.g initial={{ x: 0 }} animate={{ x: [0, 260, 1500] }} transition={{ duration: 11, times: [0, 0.35, 1], ease: "easeIn" }}>
+        <motion.g animate={{ y: [0, -3, 0, -2, 0] }} transition={loopT(0.5)}>
+          <Truck x={430} y={760} s={1} />
+        </motion.g>
+      </motion.g>
+      <Particles seed={132} count={30} rise color={outcome === 0 ? "#f3d9a0" : "#f2a33a"} glow area={[0, 250, 700, 450]} dist={260} dur={[4, 9]} opacity={0.75} />
+      {outcome === 2 && <SirenWash intensity={0.35} dur={1.3} />}
+    </g>
+  );
+}
+
+function EndingScreen({ result, charId, forest = false, onDone }) {
+  const char = charById(charId);
+  const outcome = outcomeOf(result.meters);
+  const oc = ENDING_OUTCOMES[outcome];
+  const lines = useMemo(() => endingLines(outcome, char), [outcome]);
+  const tm = useMemo(() => { try { return analyzeTelemetry(result.telemetry); } catch (e) { return null; } }, [result]);
+  const [phase, setPhase] = useState(forest ? "analyse" : "story");
+  const [line, setLine] = useState(-1);
+  const [stamp, setStamp] = useState(false);
+  const [step, setStep] = useState(-1);
+  const doneRef = useRef(false);
+  const finish = () => { if (doneRef.current) return; doneRef.current = true; onDone(); };
+
+  const steps = useMemo(() => {
+    const n = (tm && tm.perQ && tm.perQ.length) || (result.history || []).length || 10;
+    const out = [{ icon: "list-checks", text: "อ่านการตัดสินใจทั้ง " + n + " ครั้งของคุณ" }];
+    if (tm && tm.hasData) out.push({ icon: "hourglass", text: "เวลาตัดสินใจเฉลี่ย " + tm.avgLatency + " วินาที · เปลี่ยนใจรวม " + tm.totalSwitches + " ครั้ง" });
+    out.push({ icon: "brain", text: "ประเมินทักษะสมอง 3 ด้าน: ความจำใช้งาน · การยับยั้งชั่งใจ · ความยืดหยุ่นทางความคิด" });
+    if (tm && tm.pressureLabel) out.push({ icon: "gauge", text: "การรับมือแรงกดดัน: " + tm.pressureLabel });
+    out.push({ icon: "sliders-horizontal", text: "จับคู่บุคลิกภาพทั้ง 4 มิติ" });
+    return out;
+  }, [tm]);
+
+  // ฉากจบ
+  useEffect(() => {
+    if (phase !== "story") return;
+    AUDIO.stopSiren();
+    const ids = lines.map((ln, i) => setTimeout(() => { setLine(i); if (ln.sfx) AUDIO.play(ln.sfx); }, ln.at));
+    ids.push(setTimeout(() => { setStamp(true); AUDIO.play(oc.sfx); }, ENDING_STORY_MS - 1800));
+    ids.push(setTimeout(() => setPhase("analyse"), ENDING_STORY_MS));
+    return () => ids.forEach(clearTimeout);
+  }, [phase]);
+
+  // หน้าวิเคราะห์
+  useEffect(() => {
+    if (phase !== "analyse") return;
+    const ids = steps.map((_, i) => setTimeout(() => { setStep(i); AUDIO.play("type"); }, 500 + i * 650));
+    const end = 500 + steps.length * 650;
+    ids.push(setTimeout(() => { setStep(steps.length); AUDIO.play("item"); }, end + 200));
+    ids.push(setTimeout(finish, end + 1400));
+    return () => ids.forEach(clearTimeout);
+  }, [phase]);
+
+  const skip = () => { AUDIO.play("click"); if (phase === "story") setPhase("analyse"); else finish(); };
+  const progress = Math.min(1, (step + 1) / (steps.length + 1));
+
+  return (
+    <div className="relative h-full flex flex-col" style={{ background: "#070807" }}>
+      <div className="flex items-center justify-between gap-2 px-1 py-3 f-mono text-[10px] sm:text-[11px] tracking-[.18em] uppercase" style={{ color: "var(--dim)" }}>
+        <span className="inline-flex items-center gap-2 min-w-0 truncate" style={{ color: phase === "story" ? "var(--red)" : "var(--green)" }}>
+          <span className="w-2 h-2 shrink-0 rounded-full" style={{ background: "currentColor" }} />
+          {phase === "story" ? "CAM-01 · ฉากจบ" : "SURVIMIND · ANALYSIS"}
+        </span>
+        <button id="ending-skip" onClick={skip} className="shrink-0 whitespace-nowrap px-3 py-1.5 border mr-16 sm:mr-20" style={{ borderColor: "var(--line)", color: "var(--dim)", background: "rgba(17,19,17,.6)" }}>ข้าม ›</button>
+      </div>
+
+      {phase === "story" ? (
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 pb-4">
+          <div className="relative w-full max-w-5xl aspect-video overflow-hidden border" style={{ borderColor: "var(--line)" }}>
+            <SceneArt n="end" charId={charId} phase={outcome} />
+            <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: "inset 0 0 120px 20px rgba(0,0,0,.75)" }} />
+            <AnimatePresence>
+              {stamp && (
+                <motion.div key="stamp" initial={{ opacity: 0, scale: 1.6, rotate: -14 }} animate={{ opacity: 1, scale: 1, rotate: -8 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  className="absolute right-[5%] top-[8%] px-2 py-1 sm:px-4 sm:py-2 border-2 sm:border-4 text-center" style={{ borderColor: oc.color, color: oc.color, background: "rgba(7,8,7,.55)" }}>
+                  <div className="f-display font-bold text-base sm:text-4xl tracking-widest leading-none">{oc.en}</div>
+                  <div className="f-display font-semibold text-[11px] sm:text-base mt-0.5 sm:mt-1">{oc.th}</div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <div className="w-full max-w-3xl min-h-[64px] flex items-center justify-center text-center px-2" aria-live="polite">
+            <AnimatePresence mode="wait">
+              {line >= 0 && (
+                <motion.p key={line} initial={{ opacity: 0, y: 8, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.6 }}
+                  className="f-display text-lg sm:text-2xl leading-relaxed" style={{ color: line === lines.length - 1 ? "var(--amber)" : "var(--bone)" }}>
+                  {lines[line].text}
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6 px-2 pb-6">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <motion.div animate={{ scale: [1, 1.06, 1] }} transition={{ duration: 1.4, repeat: Infinity }}><RadarBlip size={72} /></motion.div>
+            <span className="lbl" style={{ color: "var(--green)" }}>Survivor identity scan</span>
+            <h2 className="f-display font-bold text-2xl sm:text-4xl">{step >= steps.length ? "ตัวตนของคุณพร้อมแล้ว" : "กำลังวิเคราะห์ตัวตนของคุณ…"}</h2>
+          </div>
+          <div className="w-full max-w-xl h-1.5 overflow-hidden" style={{ background: "var(--panel-2)" }}>
+            <motion.div className="h-full" style={{ background: "var(--amber)", boxShadow: "0 0 14px var(--amber)" }} animate={{ width: progress * 100 + "%" }} transition={{ duration: 0.5 }} />
+          </div>
+          <ul className="w-full max-w-xl flex flex-col gap-2.5">
+            {steps.map((st, i) => (
+              <motion.li key={i} initial={{ opacity: 0, x: -10 }} animate={step >= i ? { opacity: 1, x: 0 } : { opacity: 0.18, x: 0 }} transition={{ duration: 0.35 }}
+                className="flex items-start gap-3 text-sm sm:text-base leading-relaxed">
+                <span className="shrink-0 mt-0.5" style={{ color: step > i || step >= steps.length ? "var(--green)" : "var(--amber)" }}><Icon name={step > i || step >= steps.length ? "check" : st.icon} size={16} /></span>
+                <span style={{ color: step >= i ? "var(--bone)" : "var(--dim)" }}>{st.text}</span>
+              </motion.li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function useFit16x9(ref) {
   const [box, setBox] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -8566,7 +8771,7 @@ async function renderResultCard(d) {
   ctx.strokeStyle = C.amber; ctx.lineWidth = 4; ctx.strokeRect(22, 22, CARD_W - 44, CARD_H - 44);
   const P = 56, IW = CARD_W - P * 2, colW = (IW - 24) / 2;
   // ---- A. หัวการ์ด + ผู้เล่น + รหัสยืนยัน ----
-  ctx.fillStyle = C.amber; ctx.font = `600 24px ${MO}`; ctx.fillText("MBTI SURVIVAL · SURVIVOR PROFILE", P, 78);
+  ctx.fillStyle = C.amber; ctx.font = `600 24px ${MO}`; ctx.fillText("SURVIMIND · SURVIVOR PROFILE", P, 78);
   ctx.textAlign = "right"; ctx.fillStyle = C.dim; ctx.font = `500 24px ${TH}`; ctx.fillText(d.scenario + " · " + d.date, CARD_W - P, 78); ctx.textAlign = "left";
   ctx.fillStyle = C.panel; ctx.fillRect(P, 98, IW, 62);
   ctx.fillStyle = C.dim; ctx.font = `500 22px ${TH}`; ctx.fillText("ผู้เล่น", P + 18, 137);
@@ -8693,7 +8898,7 @@ function ResultCardModal({ data, onClose, onName }) {
     }, url ? 350 : 0);
     return () => { alive = false; clearTimeout(t); };
   }, [name]);
-  const fname = "MBTI-Survival-" + data.type + "-" + (name.trim() || data.charName).replace(/[\\/:*?"<>|]/g, "") + ".png";
+  const fname = "SURVIMIND-" + data.type + "-" + (name.trim() || data.charName).replace(/[\\/:*?"<>|]/g, "") + ".png";
   const save = async () => {
     if (!blob || busy) return;
     setBusy(true); setMsg(null); AUDIO.play("click");
@@ -9639,7 +9844,7 @@ function App() {
     const type0 = computeMBTI(r.scores, ch0.baseType).map((l) => l.letter).join("");
     let code = "";
     try { code = verifyCode(profile && profile.sid, type0, r.scores, analyzeTelemetry(r.telemetry).ef); } catch (e) {}
-    setResult({ ...r, code, sid: profile && profile.sid }); setScreen("result");
+    setResult({ ...r, code, sid: profile && profile.sid }); setScreen("ending");
     if (profile) {
       const ch = ch0;
       const type = type0;
@@ -9655,8 +9860,8 @@ function App() {
       STORE.saveSession({ sid: profile.sid, scenario: scenario || "zombie", character: charId, mbti: type, scores: r.scores, telemetry, code, finishedAt: Date.now() });
     }
   };
-  const restart = () => { AUDIO.stopSiren(); setActiveScenario("zombie"); setResult(null); setCharId(null); setScenario(null); setProfile(null); setRunId((r) => r + 1); setScreen("title"); };
-  const mobile = device === "mobile" && screen !== "title" && screen !== "splash";
+  const restart = () => { AUDIO.stopSiren(); setActiveScenario("zombie"); setResult(null); setCharId(null); setScenario(null); setProfile(null); setRunId((r) => r + 1); setScreen("home"); };
+  const mobile = device === "mobile" && screen !== "title" && screen !== "splash" && screen !== "home";
 
   return (
     <MotionConfig reducedMotion="user">
@@ -9668,10 +9873,10 @@ function App() {
             : { width: "100%", height: "100%", background: "var(--char)" }}>
           <AnimatePresence mode="wait">
             <motion.div key={screen + runId} {...fade} className="h-full w-full"><ScreenBoundary>
-              {screen === "splash" && <SplashScreen onPlay={() => setScreen("title")} />}
+              {(screen === "splash" || screen === "home") && <SplashScreen instant={screen === "home"} onPlay={() => start(detectDevice())} onData={() => setScreen("data")} />}
               {screen === "title" && <TitleScreen onStart={start} onData={() => setScreen("data")} />}
-              {screen === "profile" && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("title")} initial={profile} />}
-              {screen === "data" && <DataScreen onBack={() => setScreen("title")} />}
+              {screen === "profile" && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("home")} initial={profile} />}
+              {screen === "data" && <DataScreen onBack={() => setScreen("home")} />}
               {screen === "intro" && scenario !== "forest" && <IntroScreen onDone={() => setScreen("game")} onBack={() => setScreen("select")} />}
               {screen === "intro" && scenario === "forest" && <IntroScreen intro={INTRO_FOREST} narration={null} startLabel={FOREST_QUESTIONS_READY ? "เริ่มทำแบบทดสอบ ข้อ 1" : "ไปต่อ (คำถามกำลังมา)"}
                 onDone={() => setScreen(FOREST_QUESTIONS_READY ? "game" : "soon")} onBack={() => setScreen("select")} />}
@@ -9686,14 +9891,15 @@ function App() {
                   </div>
                 </div>
               )}
-              {screen === "select" && !profile && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("title")} />}
-              {screen === "scenario" && !profile && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("title")} />}
+              {screen === "select" && !profile && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("home")} />}
+              {screen === "scenario" && !profile && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("home")} />}
               {screen === "scenario" && profile && <ScenarioScreen device={device} picked={scenario} onBack={() => setScreen("profile")} onPick={pickScenario} />}
               {screen === "select" && profile && <SelectScreen device={device} picked={charId} onBack={() => setScreen("scenario")} onPick={(id) => { setCharId(id); setScreen("intro"); }} />}
               {screen === "game" && (
                 <GameScreen device={device} charId={charId} muted={muted} onToggleMute={toggleMute} crt={crt} onToggleCrt={() => setCrt((c) => !c)}
                   onComplete={finishGame} onExit={() => { AUDIO.stopSiren(); setScreen("select"); }} />
               )}
+              {screen === "ending" && result && <EndingScreen result={result} charId={charId} forest={scenario === "forest"} onDone={() => setScreen("result")} />}
               {screen === "result" && result && <ResultScreen device={device} charId={charId} result={result} onRestart={restart} />}
             </ScreenBoundary></motion.div>
           </AnimatePresence>
