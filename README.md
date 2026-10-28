@@ -26,4 +26,5 @@
 | `worker/worker.js` | ตัวกลางเรียก Google Gemini (วางใน Cloudflare Workers) เก็บ API key ไว้ไม่ให้ผู้เล่นเห็น |
 | `worker/SETUP.md` | ขั้นตอนตั้งค่า AI วิเคราะห์ผล ทีละขั้น |
 | `CHANGES-questions.md` | บันทึกการแก้คำถามเพื่อให้การวัดบุคลิกแม่นขึ้น (ทีมตรวจทานได้) |
+| `RECORDING-script.md` | บทอัดเสียงใหม่ 4 ไฟล์ หลังเปลี่ยนฉากเป็นมหาวิทยาลัย |
 | `wrangler.jsonc` | ตั้งค่าให้ Cloudflare deploy ตัวกลาง AI ถูกต้อง ห้ามลบ |
