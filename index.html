@@ -3811,7 +3811,43 @@ function TacButton({ id, children, onClick, tone = "amber", icon, className = ""
   );
 }
 
-function Meter({ label, icon, value, color, delta }) {
+/* ===== Squad Condition: ความหมาย + สถานะที่มีผลจริง =====
+   ค่าทั้งสามสะท้อนชีวิตจริงของนักศึกษา · สถานะมีผลกับเกม (ค่าพลัง/บรรยากาศ) แต่ไม่แตะคะแนน MBTI */
+const METER_LIFE = { health: "ชีวิตจริง = การดูแลตัวเอง", infection: "ชีวิตจริง = การกล้าเสี่ยง", panic: "ชีวิตจริง = ความเครียด" };
+const INF_DRAIN = 3;
+const statusesOf = (m) => {
+  const forest = isForest(), out = [];
+  if (m.health <= 30) out.push({ id: "injured", icon: "bandage", color: "var(--red)", label: "บาดเจ็บ",
+    text: "ไอเทมรักษาได้ผล ×1.5 · ถ้า Health ไม่ฟื้น ตอนจบจะไม่ดี" });
+  if (m.infection >= 70) out.push({ id: "infected", icon: infIcon(), color: "var(--red)", label: forest ? "ตกอยู่ในอันตราย" : "เชื้อลุกลาม",
+    text: "Health −" + INF_DRAIN + " ทุกข้อ จนกว่า " + infLabel() + " จะต่ำกว่า 70" });
+  if (m.panic >= 70) out.push({ id: "panicked", icon: "brain", color: "var(--amber)", label: "ตื่นตระหนก",
+    text: "มือสั่น ตัวเลือกสั่นไหว · ใช้ไอเทมสงบใจหรือเลือกทางที่ได้พักช่วยได้" });
+  if (!out.length && m.health >= 70 && m.panic <= 35) out.push({ id: "steady", icon: "shield-check", color: "var(--green)", label: "พร้อมลุย",
+    text: "ทีมแข็งแรงและคุมสติได้ดี" });
+  return out;
+};
+function StatusChips({ meters, wide }) {
+  const list = statusesOf(meters);
+  if (!list.length) return null;
+  return (
+    <div className="flex flex-col gap-1.5 pt-1" style={{ borderTop: "1px dashed var(--line)" }}>
+      <AnimatePresence initial={false}>
+        {list.map((st) => (
+          <motion.div key={st.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
+            className="flex items-start gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 shrink-0 f-display font-semibold" style={{ border: "1px solid " + st.color, color: st.color }}>
+              <Icon name={st.icon} size={12} />{st.label}
+            </span>
+            <span className="leading-snug" style={{ color: "var(--dim)", fontSize: wide ? 11 : 10 }}>{st.text}</span>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function Meter({ label, icon, value, color, delta, life = null }) {
   return (
     <div className="flex flex-col gap-1 min-w-0">
       <div className="flex items-center justify-between gap-2">
@@ -3831,6 +3867,7 @@ function Meter({ label, icon, value, color, delta }) {
       <div className="h-1.5 overflow-hidden" style={{ background: "var(--panel-2)" }}>
         <motion.div className="h-full" style={{ background: color }} animate={{ width: value + "%" }} transition={{ duration: 0.6 }} />
       </div>
+      {life && <span className="text-[10px] leading-none" style={{ color: "var(--dim)" }}>{life}</span>}
     </div>
   );
 }
@@ -8124,7 +8161,7 @@ function tourSteps(forest) {
     { id: "scene-box", icon: "film", title: "ภาพสถานการณ์", body: "ดูว่าทีมอยู่ที่ไหนและกำลังเจออะไร ภาพจะเปลี่ยนไปตามเรื่องราวในแต่ละข้อ" },
     { id: "dialogue-box", icon: "message-square-text", title: "เรื่องราวและคำถาม", body: "คำถามจะขึ้นตรงนี้พร้อมเสียงอ่าน แตะกล่องนี้ถ้าอยากให้ข้อความขึ้นครบทันที" },
     { id: "options-grid", icon: "list-checks", title: "เลือกสิ่งที่ \"คุณ\" จะทำจริง ๆ", body: "แตะตัวเลือกที่ใช่ แล้วกดยืนยัน เปลี่ยนใจได้ก่อนยืนยัน ไม่มีคำตอบถูกหรือผิด ตอบตามที่เป็นตัวเองที่สุด" },
-    { id: "squad-panel", icon: "activity", title: "สภาพของทีม", body: "Health · " + (forest ? "Danger" : "Infection") + " · Panic จะเปลี่ยนตามการตัดสินใจของคุณ ใช้ดูว่าทีมต้องการอะไรอยู่ตอนนี้" },
+    { id: "squad-panel", icon: "activity", title: "สภาพของทีม", body: "Health (การดูแลตัวเอง) · " + (forest ? "Danger" : "Infection") + " (การกล้าเสี่ยง) · Panic (ความเครียด) เปลี่ยนตามการตัดสินใจของคุณ ถ้าค่าข้ามเกณฑ์จะเกิดสถานะ เช่น บาดเจ็บ หรือตื่นตระหนก ซึ่งมีผลต่อเกมและตอนจบ" },
     { id: "belt-panel", icon: "backpack", title: "ไอเทมในเป้", body: "แตะไอเทมเพื่อใช้คู่กับคำตอบข้อนั้น หรือมอบให้เพื่อนที่กำลังต้องการความช่วยเหลือ ระหว่างทางจะเก็บไอเทมเพิ่มได้" },
     { id: null, icon: forest ? "trees" : "siren", title: "พร้อมแล้ว ไปกันเลย!", body: (forest ? "ป่าแห่งนี้รับรู้ได้ว่าคุณลังเลหรือมั่นใจ " : "บางฉากจะมีซอมบี้จู่โจม ต้องตอบสนองภายในเวลา และถ้าลังเลนาน ซอมบี้จะค่อย ๆ เข้ามาใกล้ ") + "ระหว่างทางมีการสแกนความจำ และถ้าคิดไม่ออกจะมีคำใบ้ขึ้นมาช่วย" },
   ];
@@ -8491,6 +8528,20 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     setQi(prev); setPhase("enter");
   };
   const pickable = phase === "options" || phase === "choose";
+  // สถานะใหม่ (บาดเจ็บ/เชื้อลุกลาม/ตื่นตระหนก) → เสียงเตือนครั้งเดียว
+  const statusKey = statusesOf(meters).map((x) => x.id).filter((x) => x !== "steady").join(",");
+  const prevStatus = useRef("");
+  useEffect(() => {
+    const was = prevStatus.current.split(","), now = statusKey.split(",").filter(Boolean);
+    if (now.some((x) => !was.includes(x))) AUDIO.play("alert");
+    prevStatus.current = statusKey;
+  }, [statusKey]);
+  // บันทึกสภาพทีมตอนเริ่มแต่ละข้อ (ใช้วาดกราฟในหน้าผลลัพธ์)
+  useEffect(() => {
+    if (phase !== "enter") return;
+    const log = tele.current.meterLog || (tele.current.meterLog = []);
+    log[qi] = { ...meters };
+  }, [phase, qi]);
   // ---- ป่าที่ตอบสนองต่อใจ ----
   const [hes, setHes] = useState(0);
   const [burst, setBurst] = useState(0);
@@ -8610,7 +8661,9 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
           events.push({ type: "gift", id: it.id, sig: it.sig, matched: true, critical, ally: true });
         } else {
           const matched = itemMatches(it.id, q.n);
-          const b = matched ? ITEM_DB[it.id].effect : { panic: -1 };
+          let b = matched ? ITEM_DB[it.id].effect : { panic: -1 };
+          // สถานะ "บาดเจ็บ": ไอเทมรักษาได้ผลเพิ่ม ×1.5
+          if (matched && meters.health <= 30 && (b.health || 0) > 0) { b = { ...b, health: Math.round(b.health * 1.5) }; notes.push({ kind: "status", name: "บาดเจ็บ: รักษาได้ผล ×1.5", icon: "bandage" }); }
           fx = fxAdd(fx, b);
           it.charges -= 1;
           if (it.charges <= 0) inv = inv.filter((x) => x.id !== it.id);
@@ -8628,6 +8681,8 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
       else inv.push(makeItem(id));
       notes.push({ kind: "gain", name: ITEM_DB[id].name, icon: ITEM_DB[id].icon }); events.push({ type: "gain", id });
     });
+    // สถานะ "เชื้อลุกลาม/ตกอยู่ในอันตราย": Health ลดทุกข้อ
+    if (meters.infection >= 70) { const d = { health: -INF_DRAIN }; fx = fxAdd(fx, d); notes.push({ kind: "status", name: (isForest() ? "ตกอยู่ในอันตราย" : "เชื้อลุกลาม") + " Health −" + INF_DRAIN, icon: infIcon() }); }
     tele.current.items = [...tele.current.items.filter((e) => e.qi !== qi), ...events.map((e) => ({ ...e, qi, n: q.n }))];
     setInventory(inv);
     setItemNote(notes.length ? notes : null);
@@ -8704,7 +8759,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const edFinish = () => {
     edReset();
     onComplete({ scores: scoresRef.current, meters: metersRef.current, inventory: invRef.current, history: histRef.current,
-      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
+      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], meterLog: (tele.current.meterLog || []).map((m, i) => (m ? { ...m, n: i + 1 } : null)).filter(Boolean), endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
   };
   const edSkip = () => (qi < questions.length - 1 ? edJump(qi + 1) : edFinish());
   const edInterlude = (k) => { edReset(); handled.current.add(k); handled.current.add("r" + k); handled.current.add("i" + k); setPendingIl(k); if (k !== qi) setQi(k); };
@@ -8726,7 +8781,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     if (interludesFor()[qi] && !handled.current.has("i" + qi)) { handled.current.add("i" + qi); startInterlude(qi); return; }
     if (qi < questions.length - 1) { setPicked(null); setTyped(""); setItemNote(null); setLastFx(null); setQi(qi + 1); setPhase("enter"); }
     else onComplete({ scores: scoresRef.current, meters: metersRef.current, inventory: invRef.current, history: histRef.current,
-      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
+      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], meterLog: (tele.current.meterLog || []).map((m, i) => (m ? { ...m, n: i + 1 } : null)).filter(Boolean), endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
   };
   // refs เพื่อส่งค่าล่าสุดตอนจบเกม
   const scoresRef = useRef(scores), metersRef = useRef(meters), invRef = useRef(inventory), histRef = useRef(history);
@@ -8865,7 +8920,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
               })}
               {(itemNote || []).map((nt, i) => (
                 <span key={i} className="px-2 py-0.5 border inline-flex items-center gap-1" style={{ borderColor: nt.kind === "waste" || nt.kind === "lose" ? "var(--dim)" : nt.kind === "gift" ? "#d98fb0" : "var(--amber)", color: nt.kind === "waste" || nt.kind === "lose" ? "var(--dim)" : nt.kind === "gift" ? "#d98fb0" : "var(--amber)" }}>
-                  <Icon name={nt.icon} size={12} />{{ gain: "ได้รับ", use: "ใช้", waste: "ใช้ (ไม่ค่อยได้ผล)", gift: "มอบให้" + (nt.to ? " " + nt.to + ":" : ""), lose: "เสีย", bonus: "โบนัสจาก" }[nt.kind]} {nt.name}
+                  <Icon name={nt.icon} size={12} />{{ gain: "ได้รับ", use: "ใช้", waste: "ใช้ (ไม่ค่อยได้ผล)", gift: "มอบให้" + (nt.to ? " " + nt.to + ":" : ""), lose: "เสีย", bonus: "โบนัสจาก", status: "สถานะ" }[nt.kind]} {nt.name}
                 </span>
               ))}
             </div>
@@ -9105,7 +9160,9 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
             </div>
           )}
           {/* Action panel */}
-          <div id="options-grid" className={"grid gap-2 " + (wide ? "grid-cols-2" : "grid-cols-1")} style={phase === "interlude" ? { visibility: "hidden" } : undefined}>
+          <motion.div id="options-grid" className={"grid gap-2 " + (wide ? "grid-cols-2" : "grid-cols-1")} style={phase === "interlude" ? { visibility: "hidden" } : undefined}
+            animate={meters.panic >= 70 && pickable ? { x: [0, -1.5, 1.5, -1, 1, 0], rotate: [0, -0.15, 0.15, 0] } : { x: 0, rotate: 0 }}
+            transition={meters.panic >= 70 && pickable ? { duration: 0.5, repeat: Infinity, repeatDelay: 1.6 } : { duration: 0.2 }}>
             {q.options.map((o, i) => {
               const isPicked = picked ? picked.key === o.key : !!(sel && sel.key === o.key);
               const syn = canPick ? synergyFor(o, inventory) : null;
@@ -9126,7 +9183,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
                 </motion.button>
               );
             })}
-          </div>
+          </motion.div>
           </div>
           {canPick && (
             <div className="flex items-center gap-3 flex-wrap">
@@ -9147,9 +9204,10 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
         <aside className="flex flex-col gap-3 min-w-0">
           <section id="squad-panel" className="border p-3 flex flex-col gap-3" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
             <span className="lbl inline-flex items-center gap-1.5"><Icon name="activity" size={12} />Squad condition</span>
-            <Meter label="Health" icon="heart-pulse" value={meters.health} color="var(--green)" delta={deltas.health} />
-            <Meter label={infLabel()} icon={infIcon()} value={meters.infection} color="var(--red)" delta={deltas.infection} />
-            <Meter label="Panic" icon="brain" value={meters.panic} color="var(--amber)" delta={deltas.panic} />
+            <Meter label="Health" icon="heart-pulse" value={meters.health} color="var(--green)" delta={deltas.health} life={METER_LIFE.health} />
+            <Meter label={infLabel()} icon={infIcon()} value={meters.infection} color="var(--red)" delta={deltas.infection} life={METER_LIFE.infection} />
+            <Meter label="Panic" icon="brain" value={meters.panic} color="var(--amber)" delta={deltas.panic} life={METER_LIFE.panic} />
+            <StatusChips meters={meters} wide={wide} />
           </section>
           <section className="border p-3 flex flex-col gap-2" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
             <span className="lbl inline-flex items-center gap-1.5 w-full"><Icon name="clipboard-list" size={12} />Resource log
@@ -9262,6 +9320,112 @@ function LatencyChart({ perQ, avgLatency, compact = false }) {
   );
 }
 /* ========================= Screen: Result (Track 1) ========================= */
+/* ===== กราฟเส้นทางสภาพทีม (หน้าผลลัพธ์) =====
+   จุด 0 = เริ่มเกม · จุด k = หลังจบข้อ k · แกนเดียว 0–100 · ระบุตัวตนเส้นด้วยป้ายปลายเส้น + ลายเส้นต่างกัน (ไม่พึ่งสีอย่างเดียว) */
+function MeterTrend({ result, wide }) {
+  const tl = result.telemetry || {};
+  const log = tl.meterLog || [];
+  const pts = useMemo(() => {
+    const byN = {}; log.forEach((m) => { byN[m.n] = m; });
+    const out = [];
+    for (let n = 1; n <= 10; n++) if (byN[n]) out.push({ k: n - 1, ...byN[n] });
+    out.push({ k: 10, ...result.meters });
+    return out;
+  }, [result]);
+  const [hov, setHov] = useState(null);
+  if (pts.length < 3) return null;
+  const SER = [
+    { key: "health", label: "Health", life: "ดูแลตัวเอง", color: "#84a65a", dash: null },
+    { key: "infection", label: infLabel(), life: "กล้าเสี่ยง", color: "#e5372c", dash: "7 5" },
+    { key: "panic", label: "Panic", life: "ความเครียด", color: "#f2a33a", dash: "2 4" },
+  ];
+  const W = wide ? 640 : 360, H = wide ? 230 : 240, L = wide ? 34 : 26, R = wide ? 92 : 78, T = 14, B = 30;
+  const X = (k) => L + (k / 10) * (W - L - R), Y = (v) => T + (1 - v / 100) * (H - T - B);
+  const hist = result.history || [];
+  // จุดเด่น: Panic พุ่งมากสุด · Health ลดมากสุด · จุดต่ำสุดของ Health
+  const notes = [];
+  let up = null, down = null;
+  for (let i = 1; i < pts.length; i++) {
+    const dp = pts[i].panic - pts[i - 1].panic, dh = pts[i].health - pts[i - 1].health;
+    if (!up || dp > up.d) up = { d: dp, k: pts[i].k };
+    if (!down || dh < down.d) down = { d: dh, k: pts[i].k };
+  }
+  const qText = (k) => { const h = hist[k - 1]; return h ? "ข้อ " + h.n + " " + h.title + " (เลือก " + h.key + ")" : "ข้อ " + k; };
+  if (up && up.d >= 6) notes.push({ icon: "brain", color: "var(--amber)", t: "ความเครียดพุ่งมากที่สุด +" + up.d + " หลัง" + qText(up.k) });
+  if (down && down.d <= -6) notes.push({ icon: "heart-pulse", color: "var(--red)", t: "Health ลดมากที่สุด " + down.d + " หลัง" + qText(down.k) });
+  const first = pts[0], last = pts[pts.length - 1];
+  const trend = (a, b, goodUp) => (b - a >= 8 ? (goodUp ? "ดีขึ้น" : "สูงขึ้น") : a - b >= 8 ? (goodUp ? "ลดลง" : "ลดลง") : "ทรงตัว");
+  notes.push({ icon: "activity", color: "var(--dim)", t: "ตลอดเกม: Health " + trend(first.health, last.health, true) + " (" + first.health + "→" + last.health + ") · Panic " + trend(first.panic, last.panic, false) + " (" + first.panic + "→" + last.panic + ")" });
+  const path = (key) => pts.map((p, i) => (i ? "L" : "M") + X(p.k).toFixed(1) + " " + Y(p[key]).toFixed(1)).join(" ");
+  // ป้ายปลายเส้น: กันชนกันโดยเว้นระยะอย่างน้อย 14px
+  const ends = SER.map((sr) => ({ ...sr, y: Y(last[sr.key]) })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+  const hp = hov != null ? pts.find((p) => p.k === hov) : null;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--dim)" }}>
+        {SER.map((sr) => (
+          <span key={sr.key} className="inline-flex items-center gap-1.5">
+            <svg width="22" height="8"><line x1="1" y1="4" x2="21" y2="4" stroke={sr.color} strokeWidth="2" strokeDasharray={sr.dash || undefined} strokeLinecap="round" /></svg>
+            <span style={{ color: "var(--bone)" }}>{sr.label}</span> = {sr.life}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <svg width="22" height="8"><line x1="1" y1="4" x2="21" y2="4" stroke="#f2a33a" strokeOpacity=".5" strokeWidth="1" /></svg>70 = เกณฑ์ตื่นตระหนก/เสี่ยงสูง
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <svg width="22" height="8"><line x1="1" y1="4" x2="21" y2="4" stroke="#e5372c" strokeOpacity=".5" strokeWidth="1" /></svg>30 = เกณฑ์บาดเจ็บ
+        </span>
+      </div>
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="กราฟสภาพทีมตลอด 10 ข้อ">
+          {[0, 25, 50, 75, 100].map((v) => (
+            <g key={v}>
+              <line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} stroke="#343b33" strokeWidth="1" strokeDasharray={v ? "2 4" : undefined} />
+              <text x={L - 6} y={Y(v) + 3.5} textAnchor="end" fontSize="10" fill="#9ba393" fontFamily="JetBrains Mono, monospace">{v}</text>
+            </g>
+          ))}
+          <line x1={L} x2={W - R} y1={Y(70)} y2={Y(70)} stroke="#f2a33a" strokeOpacity=".5" strokeWidth="1" />
+          <line x1={L} x2={W - R} y1={Y(30)} y2={Y(30)} stroke="#e5372c" strokeOpacity=".5" strokeWidth="1" />
+          {pts.map((p) => (
+            (wide || p.k % 2 === 0 || p.k === 10) && <text key={p.k} x={X(p.k)} y={H - 10} textAnchor="middle" fontSize="10" fill={hov === p.k ? "#e7e4d6" : "#9ba393"} fontFamily="JetBrains Mono, monospace">{p.k === 0 ? "เริ่ม" : p.k === 10 ? "จบ" : p.k}</text>
+          ))}
+          {hp && <line x1={X(hp.k)} x2={X(hp.k)} y1={T} y2={H - B} stroke="#e7e4d6" strokeOpacity=".35" strokeWidth="1" />}
+          {SER.map((sr) => (
+            <g key={sr.key}>
+              <path d={path(sr.key)} fill="none" stroke={sr.color} strokeWidth="2" strokeDasharray={sr.dash || undefined} strokeLinejoin="round" strokeLinecap="round" />
+              {pts.map((p) => (hov === p.k || p.k === 10) && (
+                <circle key={p.k} cx={X(p.k)} cy={Y(p[sr.key])} r="4.5" fill={sr.color} stroke="#191c19" strokeWidth="2" />
+              ))}
+            </g>
+          ))}
+          {ends.map((sr) => (
+            <text key={sr.key} x={W - R + 8} y={sr.y + 3.5} fontSize="11" fill="#e7e4d6" fontFamily="Chakra Petch, IBM Plex Sans Thai, sans-serif">{sr.label} {last[sr.key]}</text>
+          ))}
+          {pts.map((p, i) => {
+            const x0 = i ? (X(pts[i - 1].k) + X(p.k)) / 2 : L - 10, x1 = i < pts.length - 1 ? (X(p.k) + X(pts[i + 1].k)) / 2 : W - R + 4;
+            return <rect key={p.k} x={x0} y={T} width={x1 - x0} height={H - T - B + 20} fill="transparent" onMouseEnter={() => setHov(p.k)} onMouseLeave={() => setHov(null)} onClick={() => setHov(p.k)} style={{ cursor: "crosshair" }} />;
+          })}
+        </svg>
+        {hp && (
+          <div className="absolute top-1 pointer-events-none text-xs px-2.5 py-2 flex flex-col gap-0.5" style={{ left: wide ? `calc(${(X(hp.k) / W) * 100}% + ${hp.k > 6 ? -170 : 10}px)` : (hp.k > 5 ? 4 : "auto"), right: wide || hp.k > 5 ? "auto" : 4, width: 160, background: "#111311", border: "1px solid var(--line)" }}>
+            <span className="f-mono" style={{ color: "var(--amber)" }}>{hp.k === 0 ? "เริ่มเกม" : "หลังข้อ " + hp.k}</span>
+            {hp.k > 0 && hist[hp.k - 1] && <span className="leading-snug" style={{ color: "var(--dim)" }}>{hist[hp.k - 1].title}</span>}
+            {SER.map((sr) => (
+              <span key={sr.key} className="flex items-center gap-1.5"><svg width="14" height="6"><line x1="1" y1="3" x2="13" y2="3" stroke={sr.color} strokeWidth="2" strokeDasharray={sr.dash || undefined} /></svg>{sr.label}<span className="ml-auto f-mono tabular-nums">{hp[sr.key]}</span></span>
+            ))}
+          </div>
+        )}
+      </div>
+      <ul className="flex flex-col gap-1.5 text-sm">
+        {notes.map((nt, i) => (
+          <li key={i} className="flex items-start gap-2"><span className="mt-0.5 shrink-0" style={{ color: nt.color }}><Icon name={nt.icon} size={14} /></span><span className="leading-snug">{nt.t}</span></li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 const rise = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } } };
 const stagger = { show: { transition: { staggerChildren: 0.1, delayChildren: 0.8 } } };
 
@@ -10134,6 +10298,12 @@ function ResultScreen({ device, charId, result, onRestart }) {
               </div>
             </motion.section>
           </div>
+          {(result.telemetry && (result.telemetry.meterLog || []).length >= 2) && (
+            <motion.section variants={rise} className="border p-5 flex flex-col gap-3 min-w-0" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+              <span className="lbl">เส้นทางสภาพทีมตลอดเกม · แตะ/ชี้ที่กราฟเพื่อดูแต่ละข้อ</span>
+              <MeterTrend result={result} wide={wide} />
+            </motion.section>
+          )}
 
           </>) : (<>
           <motion.div variants={rise} className="flex flex-col gap-1">
