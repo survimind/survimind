@@ -8223,35 +8223,20 @@ function ForestMoodLayer({ hes = 0, panic = 0, burst = 0, wide = true }) {
 
 /* ===== ซอมบี้ที่รับรู้ความลังเล (Adaptive Threat · มหาวิทยาลัยซอมบี้) =====
    ใช้พฤติกรรมจริงระหว่างตอบแบบเรียลไทม์ ไม่มีผลกับคะแนน (หลักเดียวกับหมอกในหลงป่า):
-   ลังเลนาน/สลับคำตอบบ่อย → ซอมบี้ค่อย ๆ เดินเข้ามาจากขอบจอ ภาพแดงมืดลง เสียงคำรามถี่ขึ้น → ใกล้มากจะหันมาคำรามใส่
-   ตอบเร็วอย่างมั่นใจ → ซอมบี้ถอยกลับ + แฟลชสั้น ๆ */
+   ลังเลนาน/สลับคำตอบบ่อย → ข้อความเตือนว่าซอมบี้ใกล้เข้ามา ภาพแดงมืดลง เสียงคำรามถี่ขึ้น (ไม่แสดงตัวซอมบี้)
+   ตอบเร็วอย่างมั่นใจ → แฟลชสั้น ๆ */
 const ZOMBIE_TAUNTS = ["…แกรรร…", "ได้ยินเสียงลากเท้า…", "มันได้กลิ่นคุณแล้ว…", "ช้าไปแล้ว!", "มันอยู่ข้างหลังคุณ!", "เลือกเดี๋ยวนี้!"];
 function ZombieMoodLayer({ hes = 0, panic = 0, burst = 0, wide = true }) {
   const p = Math.max(0, (panic - 55) / 45);
-  const near = Math.max(0, (hes - 0.12) / 0.88);            // 0 = ยังไม่มา · 1 = ประชิดตัว
   const red = hes * 0.5 + p * 0.2, dark = 0.05 + hes * 0.35 + p * 0.2;
   const bpm = 60 + Math.round(panic * 0.7 + hes * 30);
-  const close = hes >= 0.75;
   const words = hes > 0.4 ? ZOMBIE_TAUNTS.slice(0, 1 + Math.floor((hes - 0.4) * 9)) : [];
   const pos = [[16, 20], [60, 14], [38, 34], [72, 40], [10, 48], [52, 56]];
   const label = hes >= 0.75 ? "ซอมบี้ประชิดตัวแล้ว!" : hes >= 0.4 ? "ซอมบี้กำลังเข้ามาใกล้…" : hes >= 0.2 ? "ได้ยินเสียงอะไรบางอย่าง…" : panic >= 60 ? "หัวใจเต้นแรง…" : null;
-  // ตำแหน่งซอมบี้ซ้าย/ขวา: ไกล = เล็ก อยู่ขอบจอ · ใกล้ = ใหญ่ เข้ามากลางจอ
-  const L = { x: -120 + near * 450, s: 0.8 + near * 1.9 };
-  const R = { x: 1720 - near * 450, s: 0.8 + near * 1.9 };
   return (
     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 5 }}>
       <div className="absolute inset-0" style={{ background: "radial-gradient(80% 75% at 50% 50%, transparent 40%, rgba(120,8,8,1) 100%)", opacity: red, transition: "opacity 1.2s ease" }} />
       <div className="absolute inset-0" style={{ background: "radial-gradient(75% 70% at 50% 50%, transparent 35%, rgba(4,2,2,1) 100%)", opacity: dark, transition: "opacity 1.2s ease" }} />
-      <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" className="absolute inset-0 w-full h-full"
-        style={{ opacity: near > 0 ? 1 : 0, transition: "opacity .8s ease" }}>
-        {[["zm", L, false], ["zf", R, true]].map(([kind, P, flip]) => (
-          <g key={kind} style={{ transform: `translate(${P.x}px, ${920 + near * 300}px) scale(${P.s})`, transition: "transform 1.4s ease-out" }}>
-            {close
-              ? <Zombie key="lunge" x={0} y={0} s={1} kind={kind} flip={flip} lunge />
-              : <Zombie key="walk" x={0} y={0} s={1} kind={kind} flip={flip} walk pace={0.8 + near * 0.6} />}
-          </g>
-        ))}
-      </svg>
       {panic >= 60 || hes >= 0.6 ? (
         <motion.div className="absolute inset-0" style={{ boxShadow: "inset 0 0 90px rgba(170,20,20,.9)" }}
           animate={{ opacity: [0, 0.2 + Math.max(p, hes) * 0.4, 0, 0.1 + Math.max(p, hes) * 0.25, 0] }} transition={{ duration: 60 / bpm, repeat: Infinity, ease: "easeOut" }} />
