@@ -46,6 +46,8 @@
     padding-block: 0; overflow: hidden;
   }
   #root { height: 100%; }
+  /* คอลัมน์เกม: ห้ามกล่องข้างในหดตัวจนเนื้อหาถูกตัด (จอเตี้ยต้องเลื่อนลงได้แทน) */
+  .game-col > * { flex-shrink: 0; }
   .f-display { font-family: var(--font-display); }
   .f-mono { font-family: var(--font-mono); }
   .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
@@ -3279,7 +3281,8 @@ function HazardPanel({ hz, left, inventory, allyReady, wide, onPick }) {
   const pickedItem = r && r.itemId ? ITEM_DB[r.itemId] : null;
   const btnBase = "cut flex items-start gap-3 p-3 text-left min-w-0 border";
   return (
-    <motion.section id="hazard-panel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative border p-3 sm:p-4 flex flex-col gap-3 overflow-hidden"
+    <motion.section id="hazard-panel" ref={(el) => { if (el && !el.__shown) { el.__shown = true; setTimeout(() => { try { el.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {} }, 350); } }}
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative border p-3 sm:p-4 flex flex-col gap-3 overflow-hidden shrink-0"
       style={{ borderColor: "var(--amber)", background: "rgba(36,24,8,.92)", boxShadow: "0 0 32px -8px rgba(242,163,58,.75)" }}>
       <div className="flex items-center gap-3">
         <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--amber)" }}><Icon name="backpack" size={13} />Item crisis · เลือกของในเป้ภายใน {HAZ_MS / 1000} วินาที</span>
@@ -8992,7 +8995,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
       </header>
 
       <div className={"flex-1 min-h-0 grid gap-3 " + (wide ? "grid-cols-[minmax(0,1fr)_280px]" : "grid-cols-1 overflow-y-auto scroll-thin")}>
-        <div className={"flex flex-col gap-3 min-w-0 " + (wide ? "min-h-0 overflow-y-auto scroll-thin pr-1" : "")}>
+        <div className={"game-col flex flex-col gap-3 min-w-0 " + (wide ? "min-h-0 overflow-y-auto scroll-thin pr-1" : "")}>
           {/* Main display 16:9 */}
           <motion.div id="scene-box" animate={shakeCtl} className="relative overflow-hidden border mx-auto shrink-0" style={{ aspectRatio: "16 / 9", width: wide ? "min(100%, calc((100vh - 500px) * 16 / 9))" : "100%", minWidth: wide ? 480 : 0, maxWidth: "100%", borderColor: "var(--line)", background: "#050605" }}>
             <div key={glitchKey} className={"absolute inset-0 " + (glitchKey ? "glitch" : "")}>
@@ -9063,7 +9066,8 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
           {phase === "hazard" && hazard ? (
             <HazardPanel key={"haz" + qi} hz={hazard} left={hazLeft} inventory={inventory} allyReady={allyReady} wide={wide} onPick={(pk) => resolveHazard(pk, hazard.start)} />
           ) : phase === "qte" && qte ? (
-            <motion.section id="qte-panel" key={"qte" + qi} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-3 sm:p-4 flex flex-col gap-3"
+            <motion.section id="qte-panel" key={"qte" + qi} ref={(el) => { if (el && !el.__shown) { el.__shown = true; setTimeout(() => { try { el.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {} }, 350); } }}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-3 sm:p-4 flex flex-col gap-3 shrink-0"
               style={{ borderColor: "var(--red)", background: "rgba(40,10,8,.9)", boxShadow: "0 0 30px -8px rgba(229,55,44,.8)" }}>
               <div className="flex items-center gap-3">
                 <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--red)" }}><Icon name="siren" size={13} />Quick-time event · ตอบสนองภายใน {QTE_MS / 1000} วินาที</span>
