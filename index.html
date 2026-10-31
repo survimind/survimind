@@ -3068,6 +3068,28 @@ const ITEM_DB = {
     desc: "ตัดสิ่งกีดขวาง หรือใช้เป็นอาวุธระยะประชิด", verb: "ใช้คัตเตอร์", kw: /งัด|ตัด|ฟาด|ล็อกเกอร์|ปะทะ|เคลียร์ทาง/ },
   choco: { name: "ช็อกโกแลตแท่งพลังงานสูง", icon: "cookie", charges: 2, tags: ["energy", "calm"], effect: { health: 8, panic: -5 },
     desc: "เติมพลังลดความเหนื่อยล้า หรือแบ่งให้เพื่อนกินเพื่อเรียกสติ", verb: "กินช็อกโกแลตเติมพลัง", kw: /เหนื่อย|พัก|ขนม|ลูกอม|หอบ|ดึงสติ|สปรินต์/ },
+  // ---- ไอเทมประจำตัวของหลงป่า ----
+  compass: { name: "เข็มทิศเดินป่า", icon: "compass", charges: 3, tags: ["navigate", "command", "calm"], effect: { panic: -6, infection: -5 },
+    desc: "หาทิศทางเมื่อแผนที่และ GPS ใช้ไม่ได้ ช่วยให้ทีมไม่เดินวนกลับที่เดิม", verb: "เปิดเข็มทิศหาทิศ", kw: /ทิศ|แผนที่|ทาง|นำ|เดินตาม|สำรวจ/ },
+  headlamp: { name: "ไฟฉายคาดหัว", icon: "flashlight", charges: 3, tags: ["light", "navigate", "stealth"], effect: { infection: -7, panic: -3 },
+    desc: "ส่องทางในหมอกและความมืด มือยังว่างไว้จับเพื่อนหรือถือแผนที่", verb: "เปิดไฟฉายคาดหัว", kw: /ส่อง|มืด|หมอก|สังเกต|มองหา|รอย/ },
+  trailkit: { name: "กระเป๋ายาเดินป่า", icon: "cross", charges: 2, tags: ["heal", "calm"], effect: { panic: -8, health: 7 },
+    desc: "ยาดม พลาสเตอร์ และผ้าพันข้อ สำหรับแผลและข้อเท้าแพลงระหว่างทาง", verb: "ปฐมพยาบาลเพื่อน", kw: /แผล|ปลอบ|ดูแล|บาดเจ็บ|เจ็บ|กำลังใจ|ใจเย็น/ },
+  machete: { name: "มีดเดินป่า", icon: "axe", charges: 3, tags: ["cut", "block", "fight"], effect: { infection: -6, health: 3 },
+    desc: "ฟันเถาวัลย์และกิ่งไม้ที่ขวางทาง หรือใช้ป้องกันตัวในยามจำเป็น", verb: "ใช้มีดเดินป่าเปิดทาง", kw: /ตัด|ฟัน|เถาวัลย์|กิ่ง|เปิดทาง|ขวาง/ },
+  sticky: { name: "ข้าวเหนียวห่อใบตองกับกระติกน้ำ", icon: "package", charges: 2, tags: ["energy", "calm"], effect: { health: 8, panic: -5 },
+    desc: "เสบียงจากบ้าน กินแล้วอิ่มนาน แบ่งเพื่อนเติมแรงได้", verb: "แบ่งข้าวเหนียวกินเติมแรง", kw: /เหนื่อย|พัก|กิน|หิว|ขนม|แรง/ },
+  // ---- ไอเทมประจำตัวของสึนามิ ----
+  megaphone: { name: "โทรโข่งพกพา", icon: "megaphone", charges: 3, tags: ["command", "calm", "rescue"], effect: { panic: -8, infection: -3 },
+    desc: "ตะโกนเรียกทีมและคนรอบตัวให้ไปทางเดียวกันกลางความโกลาหล", verb: "ประกาศผ่านโทรโข่ง", kw: /ตะโกน|เรียก|สั่ง|รวม|ประกาศ|บอก/ },
+  crankradio: { name: "วิทยุมือหมุนมีไฟฉาย", icon: "radio", charges: 3, tags: ["navigate", "light"], effect: { infection: -7, panic: -3 },
+    desc: "ฟังประกาศเตือนภัยตอนสัญญาณโทรศัพท์ล่ม และมีไฟฉายในตัวไว้ส่องทาง", verb: "เปิดวิทยุฟังประกาศ", kw: /ประกาศ|ข้อมูล|ป้าย|แผนที่|เส้นทาง|เจ้าหน้าที่|ไฟ/ },
+  aidkit: { name: "ชุดปฐมพยาบาลกันน้ำ", icon: "cross", charges: 2, tags: ["heal", "calm", "rescue"], effect: { panic: -8, health: 8 },
+    desc: "ล้างและปิดแผลได้แม้ตัวเปียก กันแผลติดเชื้อจากน้ำสกปรก", verb: "ทำแผลแบบกันน้ำ", kw: /แผล|บาดเจ็บ|ปลอบ|ดูแล|เด็ก|ร้องไห้/ },
+  rope: { name: "เชือกยาวกับห่วงชูชีพ", icon: "life-buoy", charges: 3, tags: ["rescue", "navigate", "block"], effect: { infection: -6, health: 3 },
+    desc: "ผูกตัวเดินลุยน้ำเป็นแถวไม่ให้ใครพลัด หรือโยนช่วยคนที่ติดอยู่", verb: "ใช้เชือกพาทีมลุยน้ำ", kw: /ลุย|น้ำ|ช่วย|ดึง|อุ้ม|เดินตาม/ },
+  rations: { name: "น้ำดื่มกับขนมพลังงาน", icon: "cup-soda", charges: 2, tags: ["energy", "calm"], effect: { health: 8, panic: -5 },
+    desc: "เติมแรงระหว่างเดินขึ้นเนิน หรือแบ่งให้คนที่หมดแรง", verb: "แบ่งน้ำและขนมเติมแรง", kw: /เหนื่อย|แรง|หิว|น้ำ|แบ่ง|พัก/ },
   // ไอเทมที่เก็บได้ระหว่างทาง
   medkit: { name: "ชุดปฐมพยาบาลครบเซ็ต", icon: "briefcase-medical", charges: 2, tags: ["heal"], effect: { health: 12, panic: -4 }, desc: "ทำแผล ห้ามเลือด ลดความเสี่ยงจากบาดแผล", verb: "ทำแผล", kw: /แผล|บาดเจ็บ|ตรวจ/ },
   axe: { name: "ขวานดับเพลิง", icon: "axe", charges: 3, tags: ["fight", "cut", "rescue", "block"], effect: { infection: -8 }, desc: "อาวุธหนัก งัดและพังสิ่งกีดขวางได้", verb: "ใช้ขวาน", kw: /ฟาด|ปะทะ|งัด|ฟัน|พัง/ },
@@ -3097,7 +3119,14 @@ const ITEM_DESC_FOREST = {
   cutter: "ตัดเถาวัลย์และกิ่งไม้ที่ขวางทาง หรือใช้ป้องกันตัวในยามจำเป็น",
 };
 const itemDesc = (id) => (isForest() && ITEM_DESC_FOREST[id]) || (isDisaster() && ITEM_DESC_DISASTER[id]) || ITEM_DB[id].desc;
-const SIGNATURE = { ek: "whistle", waen: "laser", fah: "minikit", bom: "cutter", uan: "choco" };
+const SIGNATURE = { ek: "whistle", waen: "laser", fah: "minikit", bom: "cutter", uan: "choco" };   // มหาวิทยาลัยซอมบี้
+// ไอเทมประจำตัวแยกตามสถานการณ์ (บทบาทเดิม: ผู้นำ · ส่องทาง · ปฐมพยาบาล · เปิดทาง/ช่วยเหลือ · เสบียง)
+const SIGNATURE_BY = {
+  zombie: SIGNATURE,
+  forest: { ek: "compass", waen: "headlamp", fah: "trailkit", bom: "machete", uan: "sticky" },
+  disaster: { ek: "megaphone", waen: "crankradio", fah: "aidkit", bom: "rope", uan: "rations" },
+};
+const sigOf = (charId) => (SIGNATURE_BY[ACTIVE_SCENARIO] || SIGNATURE)[charId];
 const makeItem = (id, sig = false) => ({ id, name: ITEM_DB[id].name, icon: ITEM_DB[id].icon, charges: ITEM_DB[id].charges, max: ITEM_DB[id].charges, sig });
 // สถานการณ์ของแต่ละข้อ: tags ที่ไอเทมใช้ได้ผล · ally = มีเพื่อนที่ต้องการความช่วยเหลือ (มอบไอเทมให้ได้)
 const SITUATION = {
@@ -5190,13 +5219,13 @@ function SelectScreen({ device, onPick, onBack, picked }) {
                     <p className="lbl inline-flex items-center gap-1" style={{ color: "var(--red)" }}><Icon name="triangle-alert" size={11} />จุดอ่อน</p>
                     <p className="text-sm leading-relaxed">{ch.weakness}</p>
                   </div>
-                  {(ACTIVE_SCENARIO === "zombie" || FOREST_QUESTIONS_READY) && (() => { const it = ITEM_DB[SIGNATURE[ch.id]]; return (
+                  {(ACTIVE_SCENARIO === "zombie" || FOREST_QUESTIONS_READY) && (() => { const it = ITEM_DB[sigOf(ch.id)]; return (
                     <div className="p-3 border flex gap-3 items-start" style={{ background: "rgba(242,163,58,.08)", borderColor: "rgba(242,163,58,.45)", borderRadius: "4px 4px 10px 10px" }}>
                       <span className="w-9 h-9 shrink-0 flex items-center justify-center" style={{ background: "#2f2f25", color: "var(--amber)", border: "1px solid #55553f" }}><Icon name={it.icon} size={18} /></span>
                       <div className="min-w-0">
                         <p className="lbl inline-flex items-center gap-1" style={{ color: "var(--amber)" }}><Icon name="star" size={11} />ไอเทมประจำตัว</p>
                         <p className="f-display font-semibold text-sm leading-snug">{it.name}</p>
-                        <p className="text-xs leading-relaxed" style={{ color: "var(--dim)" }}>{itemDesc(SIGNATURE[ch.id])}</p>
+                        <p className="text-xs leading-relaxed" style={{ color: "var(--dim)" }}>{itemDesc(sigOf(ch.id))}</p>
                         <p className="f-mono text-[10px] mt-1" style={{ color: "var(--amber)" }}>ใช้ได้ {it.charges} ครั้ง · {fxText(it.effect)}</p>
                       </div>
                     </div>
@@ -8906,7 +8935,7 @@ const outcomeOf = (meters) => { const h = (meters && meters.health) || 0; return
 // บรรทัดที่เล่าถึงไอเทมของผู้เล่น (แทนบรรทัด "มองกลับไปที่ตึก 6" เมื่อมีเรื่องให้เล่า)
 function itemEndingLine(result, char) {
   const tl = result.telemetry || {}, items = tl.items || [], hz = tl.hazards || [];
-  const sig = ITEM_DB[SIGNATURE[char.id]];
+  const sig = ITEM_DB[sigOf(char.id)];
   if (hz.some((e) => e.outcome === "ally")) return "เพื่อนที่คุณเคยแบ่งของให้ กลับมาช่วยคุณในวินาทีที่สำคัญที่สุด";
   if (hz.filter((e) => e.outcome === "win").length >= 2) return "ทุกครั้งที่วิกฤต คุณหยิบของถูกชิ้นได้ทันเวลา… ทีมรอดมาได้เพราะเรื่องนั้น";
   if (items.some((e) => e.type === "gift")) return "เพื่อน ๆ ยังจำได้ว่าคุณเคยแบ่งของให้ ในตอนที่ทุกคนต้องการที่สุด";
@@ -9381,7 +9410,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const [scores, setScores] = useState(emptyScores);
   const [meters, setMeters] = useState({ ...char.start });
   const [deltas, setDeltas] = useState({});
-  const [inventory, setInventory] = useState(() => [makeItem(SIGNATURE[charId], true)]);
+  const [inventory, setInventory] = useState(() => [makeItem(sigOf(charId), true)]);
   const [history, setHistory] = useState([]);
   const [glitchKey, setGlitchKey] = useState(0);
   const [itemNote, setItemNote] = useState(null);   // [{ kind, name, icon, fx }]
@@ -9830,7 +9859,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const edFinish = () => {
     edReset();
     onComplete({ scores: scoresRef.current, meters: metersRef.current, inventory: invRef.current, history: histRef.current,
-      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], meterLog: (tele.current.meterLog || []).map((m, i) => (m ? { ...m, n: i + 1 } : null)).filter(Boolean), endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
+      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], meterLog: (tele.current.meterLog || []).map((m, i) => (m ? { ...m, n: i + 1 } : null)).filter(Boolean), endInv: invRef.current, endMeters: metersRef.current, sigId: sigOf(charId), device } });
   };
   const edSkip = () => (qi < questions.length - 1 ? edJump(qi + 1) : edFinish());
   const edInterlude = (k) => { edReset(); handled.current.add(k); handled.current.add("r" + k); handled.current.add("i" + k); setPendingIl(k); if (k !== qi) setQi(k); };
@@ -9852,7 +9881,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     if (interludesFor()[qi] && !handled.current.has("i" + qi)) { handled.current.add("i" + qi); startInterlude(qi); return; }
     if (qi < questions.length - 1) { setPicked(null); setTyped(""); setItemNote(null); setLastFx(null); setQi(qi + 1); setPhase("enter"); }
     else onComplete({ scores: scoresRef.current, meters: metersRef.current, inventory: invRef.current, history: histRef.current,
-      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], meterLog: (tele.current.meterLog || []).map((m, i) => (m ? { ...m, n: i + 1 } : null)).filter(Boolean), endInv: invRef.current, endMeters: metersRef.current, sigId: SIGNATURE[charId], device } });
+      telemetry: { questions: tele.current.questions.filter(Boolean), probes: [...tele.current.probes], items: [...tele.current.items], qte: [...tele.current.qte], hazards: [...tele.current.hazards], meterLog: (tele.current.meterLog || []).map((m, i) => (m ? { ...m, n: i + 1 } : null)).filter(Boolean), endInv: invRef.current, endMeters: metersRef.current, sigId: sigOf(charId), device } });
   };
   // refs เพื่อส่งค่าล่าสุดตอนจบเกม
   const scoresRef = useRef(scores), metersRef = useRef(meters), invRef = useRef(inventory), histRef = useRef(history);
@@ -11090,7 +11119,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
     const grade = scoreR >= 80 ? "S" : scoreR >= 68 ? "A" : scoreR >= 55 ? "B" : "C";
     const temper = type[1] === "N" ? (type[2] === "T" ? "Master Strategist" : "Visionary Guardian") : (type[3] === "J" ? "Steadfast Sentinel" : "Field Survivor");
     // ไอเทมประจำตัว + ประวัติการใช้
-    const sigId = SIGNATURE[charId], sigName = ITEM_DB[sigId] ? ITEM_DB[sigId].name : "ไอเทมประจำตัว";
+    const sigId = sigOf(charId), sigName = ITEM_DB[sigId] ? ITEM_DB[sigId].name : "ไอเทมประจำตัว";
     const ev = (tm.items && tm.items.events) || [];
     const sigUse = ev.filter((e) => e.sig && e.type === "use").map((e) => e.n), sigGift = ev.filter((e) => e.sig && e.type === "gift").map((e) => e.n);
     const endSig = ((result.inventory || []).find((x) => x.sig)) || null;
@@ -11489,7 +11518,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
             lead={STRATEGY_INFO[tm.items.strategy].t + " (" + STRATEGY_INFO[tm.items.strategy].e + ") · " + STRATEGY_INFO[tm.items.strategy].d}>
             {(() => {
               const it = tm.items;
-              const sigDb = ITEM_DB[(result.telemetry && result.telemetry.sigId) || SIGNATURE[charId]];
+              const sigDb = ITEM_DB[(result.telemetry && result.telemetry.sigId) || sigOf(charId)];
               return (<>
                 <div className={"grid gap-2 " + (wide ? "grid-cols-5" : "grid-cols-2")}>
                   {[["hand", "ใช้ไอเทม", it.uses + " ครั้ง", "ตรงสถานการณ์ " + it.matched + " · ไม่ตรง " + it.wasted],
