@@ -5704,6 +5704,7 @@ function SceneArt({ n, charId, phase = 0, mood = "idle", moods: introMoods = {} 
   const others = (exclude = []) => SQUAD.filter((id) => id !== charId && !exclude.includes(id));
   let body = null;
   if (typeof n === "number" && ACTIVE_SCENARIO === "forest") body = <SceneForestQ n={n} charId={charId} mood={mood} />;
+  else if (n === "end" && ACTIVE_SCENARIO === "forest") body = <SceneForestEnding beat={5} />;   // ฉากจบหลงป่า: เดินออกจากป่ายามเช้า
   else switch (n) {
     case 1: body = <SceneClassroom mode="siege" actors={<Squad ids={others()} player={charId} look="right" mood="scared" playerMood={mood} />} />; break;
     case 2: body = <SceneCorridor actors={<Squad ids={others()} player={charId} view="back" mood="worry" playerMood={mood} />} />; break;
@@ -7878,6 +7879,12 @@ function itemEndingLine(result, char) {
 }
 function endingLines(outcome, char, result) {
   const itemLine = result ? itemEndingLine(result, char) : null;
+  if (isForest()) return [   // หลงป่า: ผลลัพธ์ตาม Health เหมือนซอมบี้
+    { at: 600, text: "แสงแดดยามเช้าส่องลอดยอดไม้ ถนนลูกรังปรากฏอยู่ตรงหน้า", sfx: "birds" },
+    { at: 3300, text: ["ทั้งห้าคนเดินออกจากป่าพร้อมกัน ทุกคนยังแข็งแรงดี", "ทุกคนออกจากป่าได้ แม้จะมีบาดแผลและเหนื่อยล้าเต็มที", "กว่าจะพยุงกันออกมาถึงถนนได้ ทุกคนแทบไม่เหลือแรง… คุณรอดมาอย่างหวุดหวิด"][outcome] },
+    { at: 6000, text: itemLine || char.name + " ยังได้ยินเสียงกระดิ่งก้องอยู่ในหัว" },
+    { at: 8600, text: "ทุกการตัดสินใจในป่าแห่งนี้… บอกอะไรบางอย่างเกี่ยวกับตัวคุณ", sfx: "chill" },
+  ];
   return [
     { at: 600, text: "รถทหารพุ่งผ่านประตูรั้ว ทิ้งมหาวิทยาลัยที่ลุกเป็นไฟไว้ข้างหลัง", sfx: "zgrowl" },
     { at: 3300, text: ["ฟ้าเริ่มสาง… เสียงคำรามค่อย ๆ จางหายไปไกล", "ทุกคนบาดเจ็บและเหนื่อยล้า แต่ยังหายใจอยู่", "มือของพวกมันเกือบคว้าท้ายรถได้… คุณรอดมาอย่างหวุดหวิด"][outcome], sfx: "heartbeat" },
@@ -7938,7 +7945,7 @@ function EndingScreen({ result, charId, forest = false, onDone }) {
   const oc = ENDING_OUTCOMES[outcome];
   const lines = useMemo(() => endingLines(outcome, char, result), [outcome, result]);
   const tm = useMemo(() => { try { return analyzeTelemetry(result.telemetry); } catch (e) { return null; } }, [result]);
-  const [phase, setPhase] = useState(forest ? "analyse" : "story");
+  const [phase, setPhase] = useState("story");   // ทั้งสองสถานการณ์มีฉากจบตาม Health
   const [line, setLine] = useState(-1);
   const [stamp, setStamp] = useState(false);
   const [step, setStep] = useState(-1);
@@ -7983,7 +7990,7 @@ function EndingScreen({ result, charId, forest = false, onDone }) {
       <div className="flex items-center justify-between gap-2 px-1 py-3 f-mono text-[10px] sm:text-[11px] tracking-[.18em] uppercase" style={{ color: "var(--dim)" }}>
         <span className="inline-flex items-center gap-2 min-w-0 truncate" style={{ color: phase === "story" ? "var(--red)" : "var(--green)" }}>
           <span className="w-2 h-2 shrink-0 rounded-full" style={{ background: "currentColor" }} />
-          {phase === "story" ? "CAM-01 · ฉากจบ" : "SURVIMIND · ANALYSIS"}
+          {phase === "story" ? (forest ? "ฉากจบ · ทางออกจากป่า" : "CAM-01 · ฉากจบ") : "SURVIMIND · ANALYSIS"}
         </span>
         <button id="ending-skip" onClick={skip} className="shrink-0 whitespace-nowrap px-3 py-1.5 border mr-16 sm:mr-20" style={{ borderColor: "var(--line)", color: "var(--dim)", background: "rgba(17,19,17,.6)" }}>ข้าม ›</button>
       </div>
@@ -10305,7 +10312,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
               )) : <p className="text-sm" style={{ color: "var(--dim)" }}>ผลของคุณกระจายหลายขั้ว ลองเล่นอีกครั้งด้วยตัวละครอื่น</p>}
             </motion.section>
             <motion.section variants={rise} className="border p-5 flex flex-col gap-3 min-w-0" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
-              <span className="lbl">สภาพทีมเมื่อขึ้นรถทหาร</span>
+              <span className="lbl">{isForest() ? "สภาพทีมเมื่อออกจากป่า" : "สภาพทีมเมื่อขึ้นรถทหาร"}</span>
               <Meter label="Health" icon="heart-pulse" value={result.meters.health} color="var(--green)" />
               <Meter label={infLabel()} icon={infIcon()} value={result.meters.infection} color="var(--red)" />
               <Meter label="Panic" icon="brain" value={result.meters.panic} color="var(--amber)" />
@@ -10411,7 +10418,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
 
 
 
-          <Section icon="siren" eyebrow={"Stress Reflex Score · QTE " + QTE_MS / 1000 + " วินาที"} title="การตั้งสติเมื่อถูกจู่โจมกะทันหัน"
+          {!isForest() && (<Section icon="siren" eyebrow={"Stress Reflex Score · QTE " + QTE_MS / 1000 + " วินาที"} title="การตั้งสติเมื่อถูกจู่โจมกะทันหัน"
             lead={tm.stressReflex === null ? "ไม่มีข้อมูล QTE ในรอบนี้" : "คะแนน " + tm.stressReflex + "/100 · " + tm.qteLabel + " คำนวณจากเวลาตอบสนอง (ยิ่งเร็วยิ่งดี) และคุณภาพของการตอบโต้ (ใช้ไอเทม/จุดแข็ง > ถอยหลบ > ตัวแข็งไม่ตอบ)"}>
             <div className="flex flex-col gap-3">
               {tm.qte.map((e) => (
@@ -10429,7 +10436,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
               ))}
               {!tm.qte.length && <p className="text-sm" style={{ color: "var(--dim)" }}>{isForest() ? "สถานการณ์หลงป่าไม่มี QTE · วัดจากการตัดสินใจในคำถามหลักแทน" : "ไม่มีการเผชิญหน้าซอมบี้ในรอบนี้"}</p>}
             </div>
-          </Section>
+          </Section>)}
 
           <Section icon="backpack" eyebrow="Resource Strategy" title="รูปแบบการบริหารจัดการทรัพยากร (ไอเทม)"
             lead={STRATEGY_INFO[tm.items.strategy].t + " (" + STRATEGY_INFO[tm.items.strategy].e + ") · " + STRATEGY_INFO[tm.items.strategy].d}>
