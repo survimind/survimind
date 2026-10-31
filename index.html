@@ -7863,7 +7863,9 @@ function Umbrella({ x, y, c = "#e5372c" }) {
 const TOURIST_C = ["#e5372c", "#f2a33a", "#4aa3d8", "#84a65a", "#d98fb0", "#f4efe2", "#8a6fc8", "#2f7fa8"];
 function Tourist({ x, y, s = 1, c = 0, pose = "stand", flip = false, alarm = false, delay = 0 }) {
   const shirt = TOURIST_C[c % TOURIST_C.length], pants = ["#2a3a5a", "#5a4a3a", "#3a5a4a", "#f4efe2"][c % 4], skin = ["#e8b98f", "#c98f62", "#f0cfb4", "#a8703f"][c % 4], hair = ["#2a1d14", "#5a3a1a", "#1a1a1a", "#c9a24a"][c % 4];
-  const head = (hx, hy, r = 22) => <g><circle cx={hx} cy={hy} r={r} fill={skin} /><path d={`M${hx - r} ${hy - 4} q${r} ${-r * 1.6} ${r * 2} 0 q${-r * 0.6} ${-r * 0.5} ${-r} ${-r * 0.4} Z`} fill={hair} /></g>;
+  const head = (hx, hy, r = 22) => <g><circle cx={hx} cy={hy} r={r} fill={skin} /><path d={`M${hx - r} ${hy - 4} q${r} ${-r * 1.6} ${r * 2} 0 q${-r * 0.6} ${-r * 0.5} ${-r} ${-r * 0.4} Z`} fill={hair} />
+    <circle cx={hx - r * 0.35} cy={hy + r * 0.1} r={r * 0.11} fill="#2a1d14" /><circle cx={hx + r * 0.35} cy={hy + r * 0.1} r={r * 0.11} fill="#2a1d14" />
+    {alarm ? <ellipse cx={hx} cy={hy + r * 0.5} rx={r * 0.16} ry={r * 0.2} fill="#7a3a2a" /> : <path d={`M${hx - r * 0.25} ${hy + r * 0.45} q${r * 0.25} ${r * 0.2} ${r * 0.5} 0`} stroke="#7a3a2a" strokeWidth={r * 0.09} fill="none" strokeLinecap="round" />}</g>;
   let body;
   if (pose === "lie") body = (
     <g><rect x="-90" y="-14" width="190" height="20" rx="6" fill={TOURIST_C[(c + 3) % 8]} opacity=".9" />
@@ -7960,17 +7962,17 @@ function BeachPeople({ mode = "beach", sea = "calm" }) {
   const swimmers = sea === "calm" ? [[560, 590, 0], [930, 600, 2], [1240, 586, 4], [300, 596, 6]] : [];
   return (
     <g>
-      {swimmers.map(([x, y, c], i) => <Tourist key={"sw" + i} x={x} y={y} c={c} pose="swim" delay={i * 0.3} />)}
+      {swimmers.map(([x, y, c], i) => <Tourist key={"sw" + i} x={x} y={y} c={c} s={1.35} pose="swim" delay={i * 0.3} />)}
       {/* แถวหลัง (ใกล้น้ำ) */}
-      {[[180, 712, 1, "stand"], [300, 706, 3, "kid"], [640, 700, 5, "stand"], [1000, 704, 2, "stand"], [1110, 700, 7, "kid"], [1440, 714, 4, "stand"]].map(([x, y, c, pose], i) => (
+      {[[180, 760, 1, "stand"], [300, 752, 3, "kid"], [640, 748, 5, "stand"], [1000, 750, 2, "stand"], [1110, 746, 7, "kid"], [1440, 762, 4, "stand"]].map(([x, y, c, pose], i) => (
         mode === "curious" && i % 2 === 0
-          ? <motion.g key={"b" + i} initial={{ y: 0 }} animate={{ y: [0, -70] }} transition={{ duration: 7, delay: 2.5 + i * 0.4, ease: "easeInOut" }}><Tourist x={x} y={y} c={c} s={0.8} pose="walk" flip={i % 4 === 0} /></motion.g>
-          : <Tourist key={"b" + i} x={x} y={y} c={c} s={0.82} pose={pose} alarm={alarm} flip={i % 2 === 1} delay={i * 0.2} />
+          ? <motion.g key={"b" + i} initial={{ y: 0 }} animate={{ y: [0, -70] }} transition={{ duration: 7, delay: 2.5 + i * 0.4, ease: "easeInOut" }}><Tourist x={x} y={y} c={c} s={1.55} pose="walk" flip={i % 4 === 0} /></motion.g>
+          : <Tourist key={"b" + i} x={x} y={y} c={c} s={1.6} pose={pose} alarm={alarm} flip={i % 2 === 1} delay={i * 0.2} />
       ))}
-      {mode === "beach" && <BeachBall x={300} y={640} />}
+      {mode === "beach" && <BeachBall x={340} y={560} />}
       {/* นั่งใต้ร่ม / นอนอาบแดด */}
-      {[[470, 758, 6, "sit"], [1220, 768, 1, "sit"]].map(([x, y, c, pose], i) => <Tourist key={"s" + i} x={x} y={y} c={c} s={0.95} pose={alarm ? "stand" : pose} alarm={alarm} />)}
-      {[[150, 870, 2], [1460, 872, 5]].map(([x, y, c], i) => <Tourist key={"l" + i} x={x} y={y} c={c} s={0.9} pose={alarm ? "stand" : "lie"} alarm={alarm} flip={i === 1} />)}
+      {[[470, 758, 6, "sit"], [1220, 768, 1, "sit"]].map(([x, y, c, pose], i) => <Tourist key={"s" + i} x={x} y={y} c={c} s={1.55} pose={alarm ? "stand" : pose} alarm={alarm} />)}
+      {[[150, 870, 2], [1460, 872, 5]].map(([x, y, c], i) => <Tourist key={"l" + i} x={x} y={y} c={c} s={1.35} pose={alarm ? "stand" : "lie"} alarm={alarm} flip={i === 1} />)}
     </g>
   );
 }
