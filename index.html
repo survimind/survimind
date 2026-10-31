@@ -8009,8 +8009,8 @@ function SceneCoast({ sea = "calm", wave = 0, tone = "day", crowd = false, peopl
         <rect x="-50" y="-160" width="100" height="56" fill="#e5372c" /><rect x="-60" y="-172" width="120" height="16" fill="#f4efe2" />
       </g>
       {people && <BeachPeople mode={people} sea={sea} />}
-      {crowd && [[200, 800, 1, 0], [520, 830, -1, 0.4], [900, 810, 1, 0.8], [1250, 840, -1, 0.2], [700, 860, 1, 1.1]].map(([x, y, dir, d], i) => (
-        <Runner key={i} x={x} y={y} s={1.1} dir={dir} delay={d} dist={700} dur={2.2} />
+      {crowd && [[100, 790, 1, 0, 0], [1500, 820, -1, 0.4, 3], [700, 800, 1, 0.8, 5], [1100, 840, -1, 0.2, 2], [300, 860, 1, 1.1, 6], [1300, 870, -1, 0.7, 1]].map(([x, y, dir, d, c], i) => (
+        <Panicker key={i} x={x} y={y} c={c} dir={dir} delay={d} dist={800} dur={2.4} />
       ))}
       {children}
     </g>
@@ -8115,12 +8115,100 @@ function FloodWater({ level = 0.2, dark = false }) {
   );
 }
 // เมืองชายฝั่ง · chaos = รถติด/คนวิ่ง · water = ระดับน้ำ 0–1 · cracked = ตึกร้าว · beacon = แสงไฟขอความช่วยเหลือ
-function SceneTown({ tone = "day", chaos = false, water = 0, sign = false, cracked = false, beacon = false, pole = false, children }) {
+// คนวิ่งหนีแบบมีสี (แทนเงาดำ) · วิ่งวนข้ามฉาก
+function Panicker({ x, y, s = 1.45, c = 0, dir = 1, dist = 700, dur = 2.4, delay = 0 }) {
+  return (
+    <motion.g animate={{ x: [0, dist * dir] }} transition={{ duration: dur, repeat: Infinity, ease: "linear", delay }}>
+      <motion.g animate={{ rotate: [-5, 5, -5] }} transition={{ duration: 0.36, repeat: Infinity }} style={{ originX: 0.5, originY: 1 }}>
+        <rect x={x - 60} y={y - 340} width="120" height="340" fill="none" />
+        <Tourist x={x} y={y} s={s} c={c} pose="stand" alarm flip={dir < 0} delay={delay} />
+      </motion.g>
+    </motion.g>
+  );
+}
+// รถชนกันกลางถนน (ควัน + กระจกแตก)
+function CarCrash({ x = 800, y = 760 }) {
+  return (
+    <g>
+      <g transform={`rotate(-10 ${x - 110} ${y})`}><Car x={x - 110} y={y} c="#c9433a" /></g>
+      <g transform={`rotate(14 ${x + 120} ${y + 10})`}><Car x={x + 120} y={y + 10} c="#3a6fa8" flip /></g>
+      <Smoke seed={351} count={4} y={y - 200} h={120} color="#8a8a86" opacity={0.28} speed={10} rise />
+      {[[-16, -40], [14, -58], [30, -30], [-30, -66]].map(([dx, dy], i) => (
+        <motion.path key={i} d={`M${x + dx} ${y + dy} l10 -6 l4 10 Z`} fill="#cfe6ee" animate={{ y: [0, -30, 10], opacity: [1, 1, 0] }} transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.25 }} />
+      ))}
+      <AlertBubble x={x} y={y - 190} />
+    </g>
+  );
+}
+// ป้ายคำพูด (SVG)
+function SpeechBubble({ x, y, w = 560, text, tail = "left", color = "#fffbe8" }) {
+  return (
+    <motion.g initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.35 }} style={{ originX: 0, originY: 0.5 }}>
+      <rect x={x} y={y - 46} width={w} height="92" rx="22" fill={color} stroke="#1c1c1c" strokeWidth="5" />
+      <path d={tail === "left" ? `M${x + 30} ${y + 40} l-50 40 l80 -36 Z` : `M${x + w - 30} ${y + 40} l50 40 l-80 -36 Z`} fill={color} stroke="#1c1c1c" strokeWidth="5" strokeLinejoin="round" />
+      <rect x={x + 6} y={y + 30} width="80" height="16" fill={color} />
+      <text x={x + w / 2} y={y + 12} textAnchor="middle" fontSize="34" fontWeight="700" fill="#1c1c1c" fontFamily="IBM Plex Sans Thai, sans-serif">{text}</text>
+    </motion.g>
+  );
+}
+// ถุงขนมที่อ้วนกำไว้
+function SnackBag({ x, y }) {
+  return (
+    <motion.g animate={{ rotate: [-6, 6, -6] }} transition={{ duration: 0.5, repeat: Infinity }} style={{ originX: 0.5, originY: 0 }}>
+      <rect x={x - 40} y={y - 4} width="80" height="8" fill="none" />
+      <path d={`M${x - 34} ${y} L${x + 34} ${y} L${x + 40} ${y + 96} L${x - 40} ${y + 96} Z`} fill="#f2a33a" stroke="#8a4a1a" strokeWidth="4" />
+      <path d={`M${x - 34} ${y} l8 -10 l8 10 l8 -10 l8 10 l8 -10 l8 10 l8 -10 l8 10`} stroke="#8a4a1a" strokeWidth="4" fill="#f2a33a" />
+      <circle cx={x} cy={y + 46} r="20" fill="#e5372c" />
+      <text x={x} y={y + 54} textAnchor="middle" fontSize="20" fontWeight="700" fill="#fff" fontFamily="IBM Plex Sans Thai, sans-serif">ขนม</text>
+    </motion.g>
+  );
+}
+// ผู้บาดเจ็บนั่งกุมขา + คนโบกมือขอความช่วยเหลือ
+function Injured({ x, y, c = 0, s = 1.45 }) {
+  return (
+    <g>
+      <Tourist x={x} y={y} c={c} s={s} pose="sit" />
+      <rect x={x + 14 * s} y={y - 34 * s} width={34 * s} height={14 * s} rx="4" fill="#f4f0e2" />
+      <rect x={x + 22 * s} y={y - 34 * s} width={10 * s} height={14 * s} fill="#c92a1f" />
+    </g>
+  );
+}
+// ไอคอนโทรศัพท์ไม่มีสัญญาณ
+function NoSignal({ x, y }) {
+  return (
+    <motion.g animate={{ y: [0, -8, 0] }} transition={loopT(1.6)}>
+      <rect x={x - 40} y={y - 70} width="80" height="140" rx="14" fill="#1c1f24" stroke="#e7e4d6" strokeWidth="5" />
+      <rect x={x - 30} y={y - 54} width="60" height="96" fill="#2f3a46" />
+      {[0, 1, 2, 3].map((i) => <rect key={i} x={x - 22 + i * 12} y={y + 10 - i * 12} width="8" height={14 + i * 12} fill="#6a7278" />)}
+      <path d={`M${x - 26} ${y - 40} l52 52 M${x + 26} ${y - 40} l-52 52`} stroke="#e5372c" strokeWidth="8" strokeLinecap="round" />
+    </motion.g>
+  );
+}
+// เป้ที่เปิดออก เหลือของไม่กี่ชิ้น
+function OpenBag({ x, y }) {
+  return (
+    <g>
+      <ellipse cx={x} cy={y + 4} rx="110" ry="14" fill="#000" opacity=".25" />
+      <path d={`M${x - 70} ${y} L${x - 60} ${y - 110} Q${x} ${y - 150} ${x + 60} ${y - 110} L${x + 70} ${y} Z`} fill="#4f6a3a" stroke="#2e3e22" strokeWidth="5" />
+      <path d={`M${x - 60} ${y - 110} Q${x} ${y - 70} ${x + 60} ${y - 110}`} fill="#3a4e2a" />
+      <rect x={x + 80} y={y - 70} width="28" height="70" rx="8" fill="#bfe0ec" stroke="#6aa0b8" strokeWidth="4" />
+      <rect x={x + 84} y={y - 30} width="20" height="26" fill="#7fb8dc" />
+      <path d={`M${x - 130} ${y} l50 0 l-6 -40 l-38 0 Z`} fill="#f2a33a" stroke="#8a4a1a" strokeWidth="4" />
+    </g>
+  );
+}
+function SceneTown({ tone = "day", chaos = false, water = 0, sign = false, cracked = false, beacon = false, pole = false, crash = false, seaRise = 0, children }) {
   const shops = [[0, "#d9c7a0"], [210, "#9fc3c9"], [420, "#e3b58a"], [630, "#c9d3a6"], [840, "#d8a8a0"], [1050, "#a8b8d8"], [1260, "#e2d29a"]];
   return (
     <g>
       <DSky tone={tone} />
       <rect y="380" width="1600" height="40" fill="#2f7fa8" opacity=".6" />
+      {seaRise > 0 && (
+        <motion.g initial={{ y: 30 }} animate={{ y: -seaRise * 120 }} transition={{ duration: 3, ease: "easeOut" }}>
+          <path d="M0 420 L0 380 Q400 330 800 370 Q1200 320 1600 372 L1600 420 Z" fill="#1d4f6a" />
+          <motion.path d="M0 380 Q400 330 800 370 Q1200 320 1600 372" stroke="#f4fbff" strokeWidth="12" fill="none" animate={{ opacity: [0.6, 1, 0.6] }} transition={loopT(1.2)} />
+        </motion.g>
+      )}
       {shops.map(([x, c], i) => (
         <g key={i}>
           <rect x={x} y={300 + (i % 3) * 20} width="200" height={360 - (i % 3) * 20} fill={c} />
@@ -8158,8 +8246,8 @@ function SceneTown({ tone = "day", chaos = false, water = 0, sign = false, crack
       )}
       {chaos && (
         <g>
-          <Car x={620} y={720} c="#c9433a" /><Car x={860} y={735} c="#3a6fa8" flip /><Car x={1440} y={720} c="#d8d4c8" />
-          {[[200, 820, 1, 0], [1000, 850, -1, 0.5], [1300, 830, 1, 1], [500, 860, -1, 0.3]].map(([x, y, dir, d], i) => <Runner key={i} x={x} y={y} s={1.05} dir={dir} delay={d} dist={600} dur={2.2} />)}
+          {crash ? <CarCrash x={820} y={750} /> : <g><Car x={620} y={720} c="#c9433a" /><Car x={860} y={735} c="#3a6fa8" flip /></g>}<Car x={1440} y={720} c="#d8d4c8" />
+          {[[120, 700, 1, 0, 1], [1500, 712, -1, 0.5, 4], [900, 706, 1, 1, 6], [400, 716, -1, 0.3, 2]].map(([x, y, dir, d, c], i) => <Panicker key={i} x={x} y={y} s={1.15} c={c} dir={dir} delay={d} dist={760} dur={2.6} />)}
         </g>
       )}
       {sign && <EvacSign x={1380} y={640} k={1.15} />}
@@ -8216,8 +8304,8 @@ function SceneDisasterQ({ n, charId, mood = "idle" }) {
     case 4: return <SceneTown cracked water={0.08} tone="storm">{G({ xs: [240, 400, 560, 720, 880], look: "right", mood: "worry", moods: { uan: "talk", waen: "scared" } })}</SceneTown>;
     case 5: return <SceneTown water={0.2} tone="storm">{G({ xs: [360, 560, 780, 1000, 1180], order: ["waen", "ek", "fah", "bom", "uan"], mood: "worry", moods: { ek: "angry", bom: "angry", fah: "talk" } })}</SceneTown>;
     case 6: return <SceneTown beacon water={0.32} tone="dusk">{G({ xs: [220, 380, 540, 700, 860], look: "right", mood: "worry", moods: { waen: "shock", fah: "sad" } })}</SceneTown>;
-    case 7: return <SceneHill tone="storm" flood={0.7}>{G({ look: "left", mood: "worry", moods: { bom: "angry", uan: "scared" } })}</SceneHill>;
-    case 8: return <SceneHill tone="dusk" flood={0.75}>{G({ xs: [480, 640, 800, 960, 1120], mood: "tired", moods: { uan: "sad", fah: "worry" } })}</SceneHill>;
+    case 7: return <SceneHill tone="storm" flood={0.7}><NoSignal x={1300} y={300} />{G({ look: "left", mood: "worry", moods: { bom: "angry", uan: "scared" } })}</SceneHill>;
+    case 8: return <SceneHill tone="dusk" flood={0.75}>{G({ xs: [420, 580, 740, 900, 1060], mood: "tired", moods: { uan: "sad", fah: "worry" } })}<OpenBag x={1260} y={870} /></SceneHill>;
     case 9: return <SceneHill tone="dusk" flood={0.8} shelter crowd officials>{G({ xs: [360, 520, 680, 840, 1000], look: "right", mood: "worry", moods: { fah: "sad", ek: "talk" } })}</SceneHill>;
     case 10: return <SceneHill tone="night" flood={0.85} shelter crowd officials announce>{G({ xs: [360, 520, 680, 840, 1000], look: "right", mood: "scared", moods: { ek: "talk", waen: "worry" } })}</SceneHill>;
     default: return null;
@@ -8231,13 +8319,33 @@ function SceneDisasterIntro({ n, beat = 0 }) {
       <SceneCoast sea="calm" people={beat >= 1 ? "alarm" : "beach"}>{G({ xs: [420, 580, 760, 920, 1080], mood: beat >= 1 ? "shock" : "happy", moods: beat >= 1 ? {} : { uan: "smile", waen: "idle", ek: "talk" } })}</SceneCoast>
     </motion.g>
   );
-  if (n === "t2") return <SceneTown pole tone="storm">{G({ xs: [520, 680, 840, 1000, 1160], look: "left", mood: beat >= 1 ? "shock" : "worry" })}{beat >= 1 && <SirenWash intensity={0.25} dur={1.4} />}</SceneTown>;
+  if (n === "t2") return <SceneTown pole tone="storm">{G({ xs: [520, 680, 840, 1000, 1160], look: "left", mood: beat >= 1 ? "shock" : "worry" })}{beat >= 1 && <SirenWash intensity={0.25} dur={1.4} />}
+    {beat >= 1 && <SpeechBubble x={300} y={170} w={760} text="แผ่นดินไหวใต้ทะเล! อพยพออกจากชายฝั่งทันที!" />}</SceneTown>;
   if (n === "t3") return <SceneCoast sea="recede" people="curious">{G({ xs: [360, 520, 700, 880, 1040], order: ["ek", "fah", "waen", "bom", "uan"], mood: beat >= 1 ? "shock" : "worry", moods: { waen: beat >= 1 ? "yell" : "shock" } })}</SceneCoast>;
-  if (n === "t4") return <SceneCoast sea="wave" wave={beat >= 1 ? 0.75 : 0.3} tone="storm" crowd={beat >= 2}>{beat >= 2 && <Particles seed={341} count={18} area={[0, 600, 1600, 300]} dist={120} color="#e9f6fb" opacity={0.5} />}</SceneCoast>;
-  if (n === "t5") return <SceneTown chaos tone="storm">{beat >= 1
-    ? <g><Actor id="bom" x={1300} y={850} h={360} enter="left" walkDur={1.2} emotion="angry" />{G({ xs: [360, 540, 720, 900, 1080], order: ["ek", "waen", "fah", "uan"], mood: "scared", moods: { uan: "worry", ek: "yell" } })}</g>
-    : G({ xs: [360, 540, 720, 900, 1080], mood: "scared", moods: { ek: "yell" } })}</SceneTown>;
-  if (n === "t6") return <SceneTown chaos tone="storm" water={beat >= 1 ? 0.05 : 0}>{G({ xs: [360, 520, 680, 840, 1000], look: "right", mood: beat >= 2 ? "scared" : "worry", moods: { fah: "sad" } })}</SceneTown>;
+  // ฉาก 4: เสียงกรีดร้องบนหาด → คลื่นยักษ์ที่ขอบฟ้า → ถนนโกลาหล รถชนกัน คนวิ่งชนกัน
+  if (n === "t4") return beat >= 2
+    ? <SceneTown chaos crash tone="storm" seaRise={1}>
+        {[[100, 870, 1, 0, 0], [1500, 880, -1, 0.4, 3], [700, 890, 1, 0.9, 5], [1200, 875, -1, 0.2, 1]].map(([x, y, dir, d, c], i) => <Panicker key={"p" + i} x={x} y={y} c={c} dir={dir} delay={d} dist={800} dur={2.2} />)}
+        {[[560, 870, 7], [1080, 880, 3]].map(([x, y, c], i) => <motion.g key={i} animate={{ x: i ? [0, -40, 0] : [0, 40, 0] }} transition={{ duration: 0.5, repeat: Infinity }}><Tourist x={x} y={y} c={c} s={1.45} alarm flip={i === 1} /></motion.g>)}
+        <AlertBubble x={820} y={560} color="#f2a33a" />
+        <Tourist x={260} y={880} c={5} s={1.35} pose="lie" />
+      </SceneTown>
+    : <SceneCoast sea="wave" wave={beat >= 1 ? 0.75 : 0.3} tone="storm" people="alarm" crowd />;
+  // ฉาก 5: เอกตะโกนสั่ง → บอมวิ่งนำออกไปก่อน · อ้วนยังกำถุงขนม
+  if (n === "t5") return <SceneTown chaos tone="storm">
+    {beat >= 1 && <Actor id="bom" x={1950} y={850} h={360} enter="left" walkDur={1.6} emotion="angry" />}
+    {G({ xs: [420, 600, 1110, 1280], order: ["waen", "fah", "uan", ...(beat >= 1 ? [] : ["bom"])], mood: "scared", moods: { uan: "shock" } })}
+    <Actor id="ek" x={820} y={880} h={410} emotion="yell" />
+    <SnackBag x={1072} y={640} />
+    {beat === 0 && <SpeechBubble x={540} y={300} w={560} text="ทุกคนรีบขึ้นที่สูง!" />}
+  </SceneTown>;
+  // ฉาก 6: ผู้บาดเจ็บและคนพลัดหลงรอบตัว → คลื่นสูงขึ้นที่ปลายถนน → ต้องตัดสินใจ
+  if (n === "t6") return <SceneTown chaos tone="storm" water={beat >= 1 ? 0.05 : 0} seaRise={beat >= 1 ? 1 : 0}>
+    <Injured x={190} y={880} c={2} />
+    <Tourist x={1440} y={880} c={4} s={1.45} alarm />
+    {beat === 0 && <SpeechBubble x={1000} y={420} w={300} text="ช่วยด้วย!" tail="right" />}
+    {G({ xs: [480, 640, 800, 960, 1120], look: "right", mood: beat >= 2 ? "scared" : "worry", moods: { fah: "sad" } })}
+  </SceneTown>;
   return null;
 }
 // ฉากคั่น tx0–tx8: beat 0 = สถานที่ · beat 1 = ทั้งห้าคนเดินเข้าฉาก · beat 2+ = เหตุการณ์
@@ -8250,8 +8358,8 @@ function SceneDisasterInterlude({ k, beat = 0 }) {
     case 2: return <SceneTown cracked={beat >= 2} water={beat >= 1 ? 0.06 : 0} tone="storm">{G({ xs: [240, 400, 560, 720, 880], mood: "scared" })}</SceneTown>;
     case 3: return <SceneTown water={0.16} tone="storm">{G({ xs: [360, 520, 700, 880, 1060], mood: beat >= 2 ? "angry" : "worry", moods: beat >= 2 ? { fah: "worry", waen: "worry", uan: "worry" } : {} })}</SceneTown>;
     case 4: return <SceneTown water={0.3} tone="dusk" beacon={beat >= 2}>{G({ xs: [220, 380, 540, 700, 860], mood: "worry", moods: beat >= 2 ? { waen: "shock" } : {} })}</SceneTown>;
-    case 5: return <SceneHill tone="storm" flood={0.65}>{G({ mood: "worry", moods: { bom: "angry" } })}</SceneHill>;
-    case 6: return <SceneHill tone="dusk" flood={0.75}>{G({ xs: [480, 640, 800, 960, 1120], mood: "tired", moods: beat >= 2 ? { uan: "sad" } : {} })}</SceneHill>;
+    case 5: return <SceneHill tone="storm" flood={0.65}>{beat >= 1 && <NoSignal x={1300} y={300} />}{G({ mood: "worry", moods: { bom: "angry" } })}</SceneHill>;
+    case 6: return <SceneHill tone="dusk" flood={0.75}>{G({ xs: [420, 580, 740, 900, 1060], mood: "tired", moods: beat >= 2 ? { uan: "sad" } : {} })}{beat >= 2 && <OpenBag x={1260} y={870} />}</SceneHill>;
     case 7: return <SceneHill tone="dusk" flood={0.8} shelter crowd officials={beat >= 2}>{G({ xs: [360, 520, 680, 840, 1000], mood: "idle", moods: { fah: "worry" } })}</SceneHill>;
     case 8: return <SceneHill tone="night" flood={0.85} shelter crowd officials announce={beat >= 1}>{G({ xs: [360, 520, 680, 840, 1000], mood: beat >= 2 ? "scared" : "tired" })}</SceneHill>;
     default: return null;
