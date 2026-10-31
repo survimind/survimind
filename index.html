@@ -7796,9 +7796,9 @@ const INTRO_DISASTER = [
   { cam: "เสียงตามสาย · ทั่วเมือง", title: "ประกาศฉุกเฉิน", desc: "อพยพออกจากชายฝั่งทันที", bg: "linear-gradient(180deg,#a9b6bf,#3a4a52 80%)", dur: 9000, art: "t2",
     steps: [{ at: 0, sfx: "siren", label: "ไซเรน", sub: "เสียงประกาศฉุกเฉินดังขึ้นทั่วเมือง" },
             { at: 3200, beat: 1, sfx: "alert", label: "ประกาศ", sub: "“ตรวจพบแผ่นดินไหวใต้ทะเล ขอให้ประชาชนอพยพออกจากพื้นที่ชายฝั่งทันที!”" }] },
-  { cam: "ชายหาด · 14:41 น.", title: "ทะเลถอยห่าง", desc: "น้ำทะเลลดลงผิดธรรมชาติ", bg: "linear-gradient(180deg,#9cc3dc,#cdb98a 80%)", dur: 9400, art: "t3", quiet: true,
+  { cam: "ชายหาด · 14:41 น.", title: "ทะเลถอยห่าง", desc: "น้ำทะเลลดลงผิดธรรมชาติ", bg: "linear-gradient(180deg,#9cc3dc,#cdb98a 80%)", dur: 11400, art: "t3", quiet: true,
     steps: [{ at: 0, sfx: "wind", label: "น้ำลด", sub: "แว่นมองไปที่ชายหาด น้ำทะเลกำลังลดลงอย่างรวดเร็ว จนเห็นพื้นทรายและโขดหินที่ไม่เคยโผล่พ้นน้ำ" },
-            { at: 5000, beat: 1, sfx: "shout", label: "แว่นตะโกน", sub: "แว่น: “ทุกคน! น้ำลดผิดปกติแบบนี้ คือสัญญาณสึนามิ!”" }] },
+            { at: 6600, beat: 1, sfx: "shout", label: "แว่นตะโกน", sub: "แว่น: “ทุกคน! น้ำลดผิดปกติแบบนี้ คือสัญญาณสึนามิ!”" }] },
   { cam: "ขอบฟ้า", title: "คลื่นยักษ์", desc: "กำลังเคลื่อนเข้าหาเมือง", bg: "linear-gradient(180deg,#5c6f80,#2c3a44 80%)", dur: 10400, art: "t4",
     steps: [{ at: 0, sfx: "screamWind", label: "เสียงกรีดร้อง", sub: "ทันใดนั้น เสียงกรีดร้องก็ดังขึ้นทั่วชายหาด" },
             { at: 3000, beat: 1, sfx: "surf", jolt: 0.6, label: "คลื่น", sub: "คลื่นยักษ์ปรากฏขึ้นสุดขอบฟ้า และกำลังเคลื่อนเข้าหาเมืองอย่างรวดเร็ว" },
@@ -7859,26 +7859,74 @@ function Umbrella({ x, y, c = "#e5372c" }) {
   );
 }
 // ทะเล + ชายหาด · sea: "calm" | "recede" | "wave" · wave = ความสูงคลื่น 0–1
-function SceneCoast({ sea = "calm", wave = 0, tone = "day", crowd = false, children }) {
-  const horizon = 430;
-  const shore = sea === "recede" || sea === "wave" ? 520 : 610;
+// นักท่องเที่ยวบนชายหาด (วาดแบบง่าย) · pose: stand | sit | lie | swim | kid | walk · alarm = ตกใจ (ยกแขน/ย่อตัว)
+const TOURIST_C = ["#e5372c", "#f2a33a", "#4aa3d8", "#84a65a", "#d98fb0", "#f4efe2", "#8a6fc8", "#2f7fa8"];
+function Tourist({ x, y, s = 1, c = 0, pose = "stand", flip = false, alarm = false, delay = 0 }) {
+  const shirt = TOURIST_C[c % TOURIST_C.length], pants = ["#2a3a5a", "#5a4a3a", "#3a5a4a", "#f4efe2"][c % 4], skin = ["#e8b98f", "#c98f62", "#f0cfb4", "#a8703f"][c % 4], hair = ["#2a1d14", "#5a3a1a", "#1a1a1a", "#c9a24a"][c % 4];
+  const head = (hx, hy, r = 22) => <g><circle cx={hx} cy={hy} r={r} fill={skin} /><path d={`M${hx - r} ${hy - 4} q${r} ${-r * 1.6} ${r * 2} 0 q${-r * 0.6} ${-r * 0.5} ${-r} ${-r * 0.4} Z`} fill={hair} /></g>;
+  let body;
+  if (pose === "lie") body = (
+    <g><rect x="-90" y="-14" width="190" height="20" rx="6" fill={TOURIST_C[(c + 3) % 8]} opacity=".9" />
+      <rect x="-40" y="-34" width="70" height="26" rx="12" fill={shirt} /><rect x="28" y="-30" width="60" height="18" rx="8" fill={skin} />{head(-60, -26, 20)}</g>);
+  else if (pose === "sit") body = (
+    <g><rect x="-20" y="-86" width="40" height="56" rx="12" fill={shirt} /><path d="M-14 -30 h60 v18 h-60 Z" fill={pants} />{head(0, -106)}</g>);
+  else if (pose === "swim") body = (
+    <motion.g animate={{ y: [0, -5, 0] }} transition={loopT(1.4, { delay })}>{head(0, -10, 18)}
+      <motion.path d="M-20 -6 q-26 -26 -40 -6 M20 -6 q26 -26 40 -6" stroke={skin} strokeWidth="8" fill="none" strokeLinecap="round" animate={{ rotate: [-8, 8, -8] }} transition={loopT(1, { delay })} /></motion.g>);
+  else {
+    const k = pose === "kid" ? 0.72 : 1;
+    body = (
+      <g transform={`scale(${k})`}>
+        <rect x="-18" y="-80" width="14" height="80" rx="6" fill={alarm ? pants : pants} /><rect x="4" y="-80" width="14" height="80" rx="6" fill={pants} />
+        <rect x="-28" y="-160" width="56" height="86" rx="16" fill={shirt} />
+        {alarm
+          ? <path d="M-24 -150 l-30 -60 M24 -150 l30 -60" stroke={skin} strokeWidth="12" strokeLinecap="round" />
+          : pose === "walk" ? <path d="M-24 -150 l-14 64 M24 -150 l18 60" stroke={skin} strokeWidth="12" strokeLinecap="round" />
+          : <motion.path d="M-24 -150 l-16 62 M24 -150 l26 -50" stroke={skin} strokeWidth="12" strokeLinecap="round" fill="none" animate={{ rotate: [-4, 6, -4] }} transition={loopT(2.2, { delay })} />}
+        {head(0, -186)}
+      </g>
+    );
+  }
+  return (
+    <g transform={`translate(${x} ${y}) scale(${flip ? -s : s} ${s})`}>
+      {pose !== "swim" && pose !== "lie" && <ellipse cx="0" cy="3" rx="34" ry="7" fill="#000" opacity=".18" />}
+      <motion.g animate={alarm ? { y: [0, -6, 0] } : { y: [0, -2, 0] }} transition={alarm ? { duration: 0.35, repeat: Infinity, delay } : loopT(3 + (c % 3), { delay })}>{body}</motion.g>
+    </g>
+  );
+}
+function BeachBall({ x, y }) {
+  return <motion.g animate={{ y: [0, -70, 0], x: [0, 30, 60] }} transition={{ duration: 1.6, repeat: Infinity, repeatType: "reverse", ease: "easeOut" }}>
+    <circle cx={x} cy={y} r="18" fill="#f4efe2" /><path d={`M${x - 18} ${y} a18 18 0 0 1 36 0 Z`} fill="#e5372c" /><path d={`M${x} ${y - 18} v36`} stroke="#4aa3d8" strokeWidth="6" /></motion.g>;
+}
+// ทะเล + ชายหาด · sea: "calm" | "recede" (ค่อย ๆ ลดลงต่อหน้า) | "wave" (ลดไปแล้ว + คลื่นที่ขอบฟ้า)
+// people: null | "beach" (คนเที่ยวเต็มหาด) | "alarm" (ตกใจแผ่นดินไหว) | "curious" (บางคนเดินลงไปดูทะเลที่ลด)
+function SceneCoast({ sea = "calm", wave = 0, tone = "day", crowd = false, people = null, children }) {
+  const horizon = 430, calmShore = 610, lowShore = 520;
+  const shore = sea === "wave" ? lowShore : calmShore;
+  const recede = sea === "recede";
+  const T = { duration: 5.2, delay: 0.5, ease: [0.45, 0, 0.3, 1] };
   return (
     <g>
       <DSky tone={tone} />
-      <rect y={horizon} width="1600" height={shore - horizon} fill="#2f7fa8" />
+      {/* พื้นทะเลที่จะโผล่เมื่อน้ำลด (อยู่ใต้ชั้นน้ำ) */}
+      <rect y={lowShore - 6} width="1600" height={660 - lowShore + 6} fill="#b39d72" />
+      <rect y={lowShore - 6} width="1600" height="40" fill="#8f7d58" opacity=".5" />
+      {[[220, 570], [520, 600], [880, 560], [1180, 605], [1420, 580], [700, 545], [1300, 548]].map(([x, y], i) => <ellipse key={i} cx={x} cy={y} rx={46 + (i % 3) * 20} ry="13" fill="#6e6a62" />)}
+      {[[360, 592], [760, 628], [1040, 588], [1240, 640]].map(([x, y], i) => (
+        <motion.path key={"f" + i} d={`M${x} ${y} q10 -8 20 0 q-10 8 -20 0 M${x + 20} ${y} l8 -6 l0 12 Z`} fill="#c8d2d8" animate={{ y: [0, -7, 0], rotate: [0, 20, 0] }} transition={loopT(0.5 + i * 0.15)} />
+      ))}
+      {/* ชั้นน้ำทะเล: calm = เต็มถึงฝั่ง · recede = ค่อย ๆ หดกลับไปทางขอบฟ้า · wave = ลดไปแล้ว */}
+      <motion.g initial={false} animate={{ scaleY: recede ? (lowShore - horizon) / (calmShore - horizon) : 1 }} transition={recede ? T : { duration: 0 }} style={{ originX: 0.5, originY: 0 }}>
+        <rect y={horizon} width="1600" height={shore - horizon} fill="#2f7fa8" />
+        <rect y={shore - 40} width="1600" height="40" fill="#3f93bb" opacity=".6" />
+      </motion.g>
       <motion.rect y={horizon} width="1600" height="16" fill="#5aa6c8" animate={{ opacity: [0.4, 0.8, 0.4] }} transition={loopT(3)} />
-      {sea === "recede" || sea === "wave" ? (
-        <g>
-          <rect y={shore} width="1600" height={660 - shore} fill="#b39d72" />
-          {[[220, 570], [520, 600], [880, 560], [1180, 610], [1420, 580]].map(([x, y], i) => <ellipse key={i} cx={x} cy={y} rx={50 + (i % 2) * 30} ry="14" fill="#6e6a62" />)}
-          {[[360, 590], [700, 620], [1020, 590]].map(([x, y], i) => (
-            <motion.path key={"f" + i} d={`M${x} ${y} q10 -8 20 0 q-10 8 -20 0 M${x + 20} ${y} l8 -6 l0 12 Z`} fill="#c8d2d8" animate={{ y: [0, -6, 0] }} transition={loopT(0.6 + i * 0.2)} />
-          ))}
-        </g>
-      ) : (
-        <motion.path d={`M0 ${shore} Q200 ${shore - 12} 400 ${shore} T800 ${shore} T1200 ${shore} T1600 ${shore} V${shore + 14} H0 Z`} fill="#e9f4f8" opacity=".75"
+      <motion.g initial={false} animate={{ y: recede ? lowShore - calmShore : 0 }} transition={recede ? T : { duration: 0 }}>
+        <motion.path d={`M0 ${shore} Q200 ${shore - 12} 400 ${shore} T800 ${shore} T1200 ${shore} T1600 ${shore} V${shore + 12} H0 Z`} fill="#e9f4f8" opacity=".75"
           animate={{ x: [0, -60, 0] }} transition={loopT(5)} />
-      )}
+      </motion.g>
+      {/* แนวทรายเปียกที่เพิ่งโผล่ (ค่อย ๆ ชัดขึ้นตามน้ำที่ลด) */}
+      {recede && <motion.rect y={lowShore} width="1600" height={calmShore - lowShore} fill="#8f7d58" initial={{ opacity: 0 }} animate={{ opacity: 0.25 }} transition={{ duration: 4, delay: 2 }} />}
       <rect y="660" width="1600" height="240" fill="#e6d3a6" />
       <rect y="660" width="1600" height="10" fill="#d4bf8e" />
       {wave > 0 && (
@@ -7898,10 +7946,31 @@ function SceneCoast({ sea = "calm", wave = 0, tone = "day", crowd = false, child
         <path d="M-40 0 L-30 -110 M40 0 L30 -110" stroke="#c9c2b0" strokeWidth="8" />
         <rect x="-50" y="-160" width="100" height="56" fill="#e5372c" /><rect x="-60" y="-172" width="120" height="16" fill="#f4efe2" />
       </g>
+      {people && <BeachPeople mode={people} sea={sea} />}
       {crowd && [[200, 800, 1, 0], [520, 830, -1, 0.4], [900, 810, 1, 0.8], [1250, 840, -1, 0.2], [700, 860, 1, 1.1]].map(([x, y, dir, d], i) => (
         <Runner key={i} x={x} y={y} s={1.1} dir={dir} delay={d} dist={700} dur={2.2} />
       ))}
       {children}
+    </g>
+  );
+}
+// คนบนชายหาด: ตำแหน่งตายตัว ไม่บังกลุ่มตัวละครหลักที่ยืนกลางฉาก
+function BeachPeople({ mode = "beach", sea = "calm" }) {
+  const alarm = mode === "alarm";
+  const swimmers = sea === "calm" ? [[560, 590, 0], [930, 600, 2], [1240, 586, 4], [300, 596, 6]] : [];
+  return (
+    <g>
+      {swimmers.map(([x, y, c], i) => <Tourist key={"sw" + i} x={x} y={y} c={c} pose="swim" delay={i * 0.3} />)}
+      {/* แถวหลัง (ใกล้น้ำ) */}
+      {[[180, 712, 1, "stand"], [300, 706, 3, "kid"], [640, 700, 5, "stand"], [1000, 704, 2, "stand"], [1110, 700, 7, "kid"], [1440, 714, 4, "stand"]].map(([x, y, c, pose], i) => (
+        mode === "curious" && i % 2 === 0
+          ? <motion.g key={"b" + i} initial={{ y: 0 }} animate={{ y: [0, -70] }} transition={{ duration: 7, delay: 2.5 + i * 0.4, ease: "easeInOut" }}><Tourist x={x} y={y} c={c} s={0.8} pose="walk" flip={i % 4 === 0} /></motion.g>
+          : <Tourist key={"b" + i} x={x} y={y} c={c} s={0.82} pose={pose} alarm={alarm} flip={i % 2 === 1} delay={i * 0.2} />
+      ))}
+      {mode === "beach" && <BeachBall x={300} y={640} />}
+      {/* นั่งใต้ร่ม / นอนอาบแดด */}
+      {[[470, 758, 6, "sit"], [1220, 768, 1, "sit"]].map(([x, y, c, pose], i) => <Tourist key={"s" + i} x={x} y={y} c={c} s={0.95} pose={alarm ? "stand" : pose} alarm={alarm} />)}
+      {[[150, 870, 2], [1460, 872, 5]].map(([x, y, c], i) => <Tourist key={"l" + i} x={x} y={y} c={c} s={0.9} pose={alarm ? "stand" : "lie"} alarm={alarm} flip={i === 1} />)}
     </g>
   );
 }
@@ -8097,11 +8166,11 @@ function SceneDisasterIntro({ n, beat = 0 }) {
   const G = (p) => <DGroup {...p} />;
   if (n === "t1") return (
     <motion.g animate={beat >= 1 ? { x: [0, -10, 9, -7, 5, 0] } : {}} transition={beat >= 1 ? { duration: 0.6, repeat: Infinity, repeatDelay: 0.4 } : {}}>
-      <SceneCoast sea="calm">{G({ xs: [420, 580, 760, 920, 1080], mood: beat >= 1 ? "shock" : "happy", moods: beat >= 1 ? {} : { uan: "smile", waen: "idle", ek: "talk" } })}</SceneCoast>
+      <SceneCoast sea="calm" people={beat >= 1 ? "alarm" : "beach"}>{G({ xs: [420, 580, 760, 920, 1080], mood: beat >= 1 ? "shock" : "happy", moods: beat >= 1 ? {} : { uan: "smile", waen: "idle", ek: "talk" } })}</SceneCoast>
     </motion.g>
   );
   if (n === "t2") return <SceneTown pole tone="storm">{G({ xs: [520, 680, 840, 1000, 1160], look: "left", mood: beat >= 1 ? "shock" : "worry" })}{beat >= 1 && <SirenWash intensity={0.25} dur={1.4} />}</SceneTown>;
-  if (n === "t3") return <SceneCoast sea="recede">{G({ xs: [360, 520, 700, 880, 1040], order: ["ek", "fah", "waen", "bom", "uan"], mood: beat >= 1 ? "shock" : "worry", moods: { waen: beat >= 1 ? "yell" : "shock" } })}</SceneCoast>;
+  if (n === "t3") return <SceneCoast sea="recede" people="curious">{G({ xs: [360, 520, 700, 880, 1040], order: ["ek", "fah", "waen", "bom", "uan"], mood: beat >= 1 ? "shock" : "worry", moods: { waen: beat >= 1 ? "yell" : "shock" } })}</SceneCoast>;
   if (n === "t4") return <SceneCoast sea="wave" wave={beat >= 1 ? 0.75 : 0.3} tone="storm" crowd={beat >= 2}>{beat >= 2 && <Particles seed={341} count={18} area={[0, 600, 1600, 300]} dist={120} color="#e9f6fb" opacity={0.5} />}</SceneCoast>;
   if (n === "t5") return <SceneTown chaos tone="storm">{beat >= 1
     ? <g><Actor id="bom" x={1300} y={850} h={360} enter="left" walkDur={1.2} emotion="angry" />{G({ xs: [360, 540, 720, 900, 1080], order: ["ek", "waen", "fah", "uan"], mood: "scared", moods: { uan: "worry", ek: "yell" } })}</g>
