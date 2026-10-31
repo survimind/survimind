@@ -153,7 +153,7 @@ const SCENARIO_SPRITES = (() => {
   // ภาพชุดเดินป่ามีมุมหน้าตรงมุมเดียว → ใช้ภาพเดียวกันทุกมุมมอง
   Object.values(f).forEach((v) => { v.q34 = v.q34 || v.front; v.side = v.side || v.front; v.back = v.back || v.front; });
   Object.entries(window.__WALK_FOREST || {}).forEach(([id, wk]) => { if (f[id]) f[id].walk = wk; });
-  return { forest: f };
+  return { forest: f, disaster: f };   // สึนามิใช้ชุดลำลองเดียวกับหลงป่า
 })();
 const spriteOf = (id) => (ACTIVE_SCENARIO !== "zombie" && SCENARIO_SPRITES[ACTIVE_SCENARIO] && SCENARIO_SPRITES[ACTIVE_SCENARIO][id]) || SPRITES[id] || {};
 const PORTRAIT_DATA = Object.fromEntries(Object.entries(SPRITES).map(([k, v]) => [k, v.front]));
@@ -184,7 +184,7 @@ const MEDIA_ASSETS = {
     if (Q[q10]) v.q10 = { ...(v.q10 || {}), question: "clip:" + q10 };
   });
 })();
-const voiceUrl = (charId, n, kind) => (ACTIVE_SCENARIO === "forest"
+const voiceUrl = (charId, n, kind) => ACTIVE_SCENARIO === "disaster" ? "" : (ACTIVE_SCENARIO === "forest"
   ? (kind === "question" && (window.__QV || {})["fq" + n] ? "clip:fq" + n : "")
   : MEDIA_ASSETS.voice[charId]?.["q" + n]?.[kind] || "");
 
@@ -272,6 +272,8 @@ function createAudio() {
     heartbeat: () => { tone(58, 0.14, { type: "sine", peak: 0.55, attack: 0.005 }); later(() => tone(50, 0.16, { type: "sine", peak: 0.4, attack: 0.005 }), 170); },
     hit:    () => { noise(0.35, { freq: 300, peak: 0.8, attack: 0.003 }); tone(70, 0.35, { to: 35, peak: 0.6, attack: 0.003 }); },
     // Intro
+    surf:    () => { noise(3.2, { type: "lowpass", freq: 700, peak: 0.32, attack: 1.1 }); later(() => noise(1.8, { type: "highpass", freq: 2400, peak: 0.08, attack: 0.4 }), 900); },
+    quake:   () => { noise(2.6, { type: "lowpass", freq: 120, peak: 0.9, attack: 0.08 }); tone(38, 2.2, { to: 26, peak: 0.6, attack: 0.1 }); },
     ambient: () => { noise(2.6, { type: "bandpass", freq: 450, q: 0.7, peak: 0.07, attack: 0.6 }); later(() => tone(1900, 0.12, { type: "triangle", peak: 0.03 }), 900); },
     boom:    () => { noise(2.4, { freq: 150, peak: 1, attack: 0.005 }); tone(90, 1.6, { to: 28, peak: 0.9, attack: 0.005 }); },
     crowd:   () => { noise(2.8, { type: "bandpass", freq: 1500, q: 0.8, peak: 0.16, attack: 0.25 }); tone(650, 0.7, { type: "triangle", to: 1150, peak: 0.05 }); },
@@ -3013,7 +3015,7 @@ const FOREST_INTERLUDES = {
     { at: 28200, sfx: "wind", sub: "ไม่มีใครหันกลับไปมอง" },
   ], end: 33600 },
 };
-const bankFor = (id) => (isForest() ? FOREST_BANK : QUESTION_BANK)[id];
+const bankFor = (id) => (isForest() ? FOREST_BANK : isDisaster() ? DISASTER_BANK : QUESTION_BANK)[id];
 const LOCATIONS = {
   1: { key: "classroom602", name: "ห้องเรียน 602", tint: "#3a4a3a" },
   2: { key: "corridor6", name: "โถงทางเดินชั้น 4 · ตึก 6", tint: "#3d3a36" },
@@ -3027,11 +3029,11 @@ const LOCATIONS = {
   10: { key: "frontyard", name: "ประตูรั้ว · รถทหาร", tint: "#3f3a26" },
 };
 
-const locTable = () => (isForest() ? LOCATIONS_FOREST : LOCATIONS);
-const situOf = (n) => (isForest() ? SITUATION_FOREST : SITUATION)[n];
+const locTable = () => (isForest() ? LOCATIONS_FOREST : isDisaster() ? LOCATIONS_DISASTER : LOCATIONS);
+const situOf = (n) => (isForest() ? SITUATION_FOREST : isDisaster() ? SITUATION_DISASTER : SITUATION)[n];
 // ชื่อแถบสถานะที่ 2: ซอมบี้ = Infection (การติดเชื้อ) · หลงป่า = Danger (ภัยลี้ลับคุกคาม)
-const infLabel = () => (isForest() ? "Danger" : "Infection");
-const infIcon = () => (isForest() ? "skull" : "biohazard");
+const infLabel = () => (ACTIVE_SCENARIO !== "zombie" ? "Danger" : "Infection");
+const infIcon = () => (isForest() ? "skull" : isDisaster() ? "waves" : "biohazard");
 /* ========================= Squad condition & inventory rules ========================= */
 const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 // ผลของตัวเลือกไม่ผูกกับตัวอักษร MBTI (บุคลิกไม่มีถูกผิด): แต่ละตัวเลือกได้ "รูปแบบผลลัพธ์" 1 ใน 6 แบบตามข้อความ (คงที่ทุกครั้งที่เล่น)
@@ -3094,7 +3096,7 @@ const ITEM_DESC_FOREST = {
   laser: "ส่องทางในหมอกและความมืด หาร่องรอยและสัญลักษณ์บนต้นไม้",
   cutter: "ตัดเถาวัลย์และกิ่งไม้ที่ขวางทาง หรือใช้ป้องกันตัวในยามจำเป็น",
 };
-const itemDesc = (id) => (isForest() && ITEM_DESC_FOREST[id]) || ITEM_DB[id].desc;
+const itemDesc = (id) => (isForest() && ITEM_DESC_FOREST[id]) || (isDisaster() && ITEM_DESC_DISASTER[id]) || ITEM_DB[id].desc;
 const SIGNATURE = { ek: "whistle", waen: "laser", fah: "minikit", bom: "cutter", uan: "choco" };
 const makeItem = (id, sig = false) => ({ id, name: ITEM_DB[id].name, icon: ITEM_DB[id].icon, charges: ITEM_DB[id].charges, max: ITEM_DB[id].charges, sig });
 // สถานการณ์ของแต่ละข้อ: tags ที่ไอเทมใช้ได้ผล · ally = มีเพื่อนที่ต้องการความช่วยเหลือ (มอบไอเทมให้ได้)
@@ -3115,6 +3117,7 @@ function allyFor(charId, n) {
   const a = situOf(n) && situOf(n).ally;
   if (!a) return null;
   if (isForest()) return a === "fah" ? (charId === "fah" ? null : "ฟ้าที่กำลังสับสนกับเสียงเรียก") : a;
+  if (isDisaster()) return n === 5 && (charId === "ek" || charId === "bom") ? null : a;   // ข้อ 5: ถ้าเป็นเอก/บอมเองก็ไม่ต้องมอบของให้ตัวเอง
   if (a === "fallen") return FALLEN_NAME[charId] + "ที่สะดุดล้ม";
   if (n === 7 && charId === "uan") return null; // ข้อ 7 มุมมองอ้วน: อ้วนต้องเอาตัวรอดเอง
   return a;
@@ -3142,6 +3145,7 @@ const ITEM_RULES = [
 // คืน { gain: [id], use: [id] } — ถ้าเป็นการโยน/ขว้าง/ทุ่ม = เสียไอเทมนั้นไป (ถ้ามีอยู่)
 function itemChange(opt, charId, n) {
   if (isForest()) { const t = LOOT_FOREST[charId] && LOOT_FOREST[charId][n]; return { gain: (t && t[opt.key]) || [], use: [] }; }
+  if (isDisaster()) { const t = LOOT_DISASTER[n]; return { gain: (t && t[opt.key]) || [], use: [] }; }
   const thrown = /โยน|ขว้าง|ทุ่ม/.test(opt.text);
   const rule = ITEM_RULES.find(([re]) => re.test(opt.text));
   const use = thrown && rule ? [rule[1]] : [];
@@ -3269,7 +3273,7 @@ const HAZARDS = {
   },
 };
 const HAZ_WRONG_FX = { panic: 2 };
-const hazardFor = (n) => (HAZARDS[isForest() ? "forest" : "zombie"] || {})[n] || null;
+const hazardFor = (n) => (HAZARDS[ACTIVE_SCENARIO] || {})[n] || null;
 // best = ได้ผลเต็มที่ · ok = พอช่วยได้ · wrong = ไม่ได้ผล
 const hazardMatch = (hz, id) => { const tags = ITEM_DB[id].tags; return tags.some((t) => hz.best.includes(t)) ? "win" : tags.some((t) => hz.ok.includes(t)) ? "part" : "wrong"; };
 const HAZ_RESULT = {
@@ -3833,7 +3837,7 @@ function TacButton({ id, children, onClick, tone = "amber", icon, className = ""
 const METER_LIFE = { health: "ชีวิตจริง = การดูแลตัวเอง", infection: "ชีวิตจริง = การกล้าเสี่ยง", panic: "ชีวิตจริง = ความเครียด" };
 const INF_DRAIN = 3;
 const statusesOf = (m) => {
-  const forest = isForest(), out = [];
+  const forest = ACTIVE_SCENARIO !== "zombie", out = [];   // หลงป่า/สึนามิ = "ตกอยู่ในอันตราย"
   if (m.health <= 30) out.push({ id: "injured", icon: "bandage", color: "var(--red)", label: "บาดเจ็บ",
     text: "ไอเทมรักษาได้ผล ×1.5 · ถ้า Health ไม่ฟื้น ตอนจบจะไม่ดี" });
   if (m.infection >= 70) out.push({ id: "infected", icon: infIcon(), color: "var(--red)", label: forest ? "ตกอยู่ในอันตราย" : "เชื้อลุกลาม",
@@ -4023,7 +4027,7 @@ function ProfileScreen({ onDone, onBack, initial }) {
           {/* คำเตือนเนื้อหา */}
           <div id="content-warning" className="flex gap-3 p-3 border-l-2 text-sm leading-relaxed" style={{ borderColor: "var(--red)", background: "rgba(229,55,44,.08)" }}>
             <span className="shrink-0 mt-0.5" style={{ color: "var(--red)" }}><Icon name="triangle-alert" size={16} /></span>
-            <span><b style={{ color: "var(--red)" }}>คำเตือนเนื้อหา</b> · สถานการณ์ "มหาวิทยาลัยซอมบี้" มีฉากความรุนแรงและเลือดแบบการ์ตูน และมีเสียงกรีดร้อง ถ้ารู้สึกไม่สบายใจ เลือกสถานการณ์ "หลงป่า" แทนได้ และหยุดเล่นได้ทุกเมื่อ</span>
+            <span><b style={{ color: "var(--red)" }}>คำเตือนเนื้อหา</b> · สถานการณ์ "มหาวิทยาลัยซอมบี้" มีฉากความรุนแรงและเลือดแบบการ์ตูน และมีเสียงกรีดร้อง ถ้ารู้สึกไม่สบายใจ เลือกสถานการณ์ "หลงป่า" แทนได้ · สถานการณ์ "สึนามิ" อ้างอิงภัยพิบัติที่เคยเกิดขึ้นจริง อาจกระทบใจผู้ที่เคยมีประสบการณ์ · หยุดเล่นได้ทุกเมื่อ</span>
           </div>
 
           <fieldset className="flex flex-col gap-2">
@@ -4448,7 +4452,7 @@ function SplashScreen({ onPlay, onData, onAbout, instant = false }) {
 
 /* ========================= Screen: เกี่ยวกับโปรเจกต์ (สำหรับกรรมการ/ผู้สอน) ========================= */
 const ABOUT_FLOW = [
-  { icon: "trees", t: "เล่นเกม 10 สถานการณ์", d: "เลือกตัวละครแล้วเอาตัวรอดจากมหาวิทยาลัยซอมบี้หรือป่าต้องห้าม ทุกข้อไม่มีคำตอบถูกหรือผิด" },
+  { icon: "trees", t: "เล่นเกม 10 สถานการณ์", d: "เลือกตัวละครแล้วเอาตัวรอดจากมหาวิทยาลัยซอมบี้ ป่าต้องห้าม หรือสึนามิ ทุกข้อไม่มีคำตอบถูกหรือผิด" },
   { icon: "radar", t: "เก็บพฤติกรรมจริง", d: "เวลาตัดสินใจ การเปลี่ยนใจ การรับมือเหตุกะทันหัน (QTE) การจำ และการใช้หรือแบ่งปันไอเทม" },
   { icon: "cpu", t: "คำนวณคะแนนที่ตรวจสอบได้", d: "บุคลิก 4 มิติ (MBTI) และทักษะสมอง 3 ด้าน (Executive Functions) ด้วยสูตรที่เปิดดูได้" },
   { icon: "sparkles", t: "AI ตีความเป็นคำแนะนำ", d: "Google Gemini อ่านข้อมูลทั้งหมด แล้วเขียนกลยุทธ์การเรียน แผน 7 วัน และตอบคำถามต่อผ่าน AI Coach" },
@@ -4977,11 +4981,12 @@ const SCENARIOS = [
   { id: "forest", name: "The Forbidden Forest", th: "หลงป่า", ready: true, color: "#84a65a", icon: "trees",
     desc: "ป่าต้องห้าม — หมู่บ้านที่ไม่มีอยู่บนแผนที่ ทริปเดินป่าที่เดินวนกลับมาที่เดิมทุกครั้ง แล้วเสียงกระดิ่งก็ดังขึ้นสามครั้ง",
     tags: ["5 ตัวละคร", "10 สถานการณ์", "อินโทร 8 ฉาก"] },
-  { id: "disaster", name: "Disaster Response", th: "ภัยพิบัติ", ready: false, color: "#f2a33a", icon: "waves",
-    desc: "น้ำท่วมฉับพลันและแผ่นดินไหวตัดขาดเมือง ทุกการตัดสินใจคือชีวิตของคนรอบตัว",
-    tags: ["อพยพ", "ช่วยเหลือผู้อื่น", "รับมือความกดดัน"] },
+  { id: "disaster", name: "Tsunami Survival", th: "วันที่ทะเลกลืนกินเมือง", ready: true, color: "#4aa3d8", icon: "waves",
+    desc: "แผ่นดินไหวใต้ทะเลระหว่างค่ายอาสาที่เมืองชายฝั่ง ทั้งห้าคนต้องพาตัวเองและคนรอบตัวขึ้นที่สูงก่อนคลื่นจะมาถึง",
+    tags: ["5 ตัวละคร", "10 สถานการณ์", "อินโทร 6 ฉาก"] },
 ];
 function ScenarioArt({ id }) {
+  if (id === "disaster") return <DisasterCardArt />;
   if (id === "zombie") return (
     <svg viewBox="0 0 1600 900" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <rect width="1600" height="900" fill="#2a1416" />
@@ -5145,7 +5150,7 @@ function SelectScreen({ device, onPick, onBack, picked }) {
     <div className="h-full overflow-y-auto scroll-thin">
       <div className={"min-h-full flex flex-col gap-6 py-6 mx-auto " + (wide ? "max-w-7xl justify-center" : "")}>
         <div className="flex flex-col gap-1">
-          <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="users" size={12} />Squad roster · {ACTIVE_SCENARIO === "forest" ? "ทริปเดินป่า" : "ห้อง 602"}</span>
+          <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="users" size={12} />Squad roster · {ACTIVE_SCENARIO === "forest" ? "ทริปเดินป่า" : ACTIVE_SCENARIO === "disaster" ? "ค่ายอาสาชายฝั่ง" : "ห้อง 602"}</span>
           <h2 className="f-display font-bold text-3xl sm:text-4xl">เลือกผู้รอดชีวิตของคุณ</h2>
           <p style={{ color: "var(--dim)" }}>แต่ละคนเจอสถานการณ์ 10 ข้อในมุมมองของตัวเอง เลือกบทบาทที่อยากเล่น</p>
         </div>
@@ -5705,6 +5710,8 @@ function SceneArt({ n, charId, phase = 0, mood = "idle", moods: introMoods = {} 
   let body = null;
   if (typeof n === "number" && ACTIVE_SCENARIO === "forest") body = <SceneForestQ n={n} charId={charId} mood={mood} />;
   else if (n === "end" && ACTIVE_SCENARIO === "forest") body = <SceneForestEnding beat={5} />;   // ฉากจบหลงป่า: เดินออกจากป่ายามเช้า
+  else if (typeof n === "number" && ACTIVE_SCENARIO === "disaster") body = <SceneDisasterQ n={n} charId={charId} mood={mood} />;
+  else if (n === "end" && ACTIVE_SCENARIO === "disaster") body = <SceneDisasterEnding outcome={phase} />;   // ฉากจบสึนามิ: รุ่งเช้าบนเนิน
   else switch (n) {
     case 1: body = <SceneClassroom mode="siege" actors={<Squad ids={others()} player={charId} look="right" mood="scared" playerMood={mood} />} />; break;
     case 2: body = <SceneCorridor actors={<Squad ids={others()} player={charId} view="back" mood="worry" playerMood={mood} />} />; break;
@@ -5742,6 +5749,8 @@ function SceneArt({ n, charId, phase = 0, mood = "idle", moods: introMoods = {} 
     case "fx8": body = <SceneForestInterlude8 beat={phase} />; break;
     case "fx9": body = <SceneForestInterlude9 beat={phase} />; break;
     case "fx10": body = <SceneForestEnding beat={phase} />; break;
+    case "t1": case "t2": case "t3": case "t4": case "t5": case "t6": body = <SceneDisasterIntro n={n} beat={phase} />; break;
+    case "tx0": case "tx1": case "tx2": case "tx3": case "tx4": case "tx5": case "tx6": case "tx7": case "tx8": body = <SceneDisasterInterlude k={+n.slice(2)} beat={phase} />; break;
     case "zx0": case "zx1": case "zx2": case "zx3": case "zx4": case "zx5": case "zx6": case "zx7": case "zx8": body = <SceneZombieInterlude k={+n.slice(2)} beat={phase} />; break;
     case "end": body = <SceneEscape outcome={phase} />; break;
     default: body = null;
@@ -7180,6 +7189,962 @@ function SceneForestInterlude7({ beat = 0 }) {
     </SceneValleyVillage>
   );
 }
+/* =====================================================================
+   สถานการณ์ที่ 3 · วันที่ทะเลกลืนกินเมือง (สึนามิ) · id = "disaster"
+   ทั้งห้าคนมาออกค่ายอาสาที่เมืองชายฝั่ง · ใช้ภาพตัวละครชุดลำลอง (ชุดเดียวกับหลงป่า)
+   คำถาม: ทุกตัวละครได้ชุดเดียวกัน · ทุกข้อมีครบ 8 ขั้ว MBTI ข้อละ 1 ครั้ง (ดู TSUNAMI-questions.md)
+   option.effects = ผลที่ตั้งตามหลักความปลอดภัยจริง (เช่น ไม่เข้าตึกร้าว · ไม่ลงที่ต่ำเมื่อมีคลื่นระลอกใหม่)
+   ===================================================================== */
+const isDisaster = () => ACTIVE_SCENARIO === "disaster";
+const DISASTER_QUESTIONS = [
+ {
+  "n": 1,
+  "title": "นาทีแห่งการตัดสินใจ",
+  "theme": "การตัดสินใจในวินาทีวิกฤต",
+  "note": "คลื่นกำลังเข้ามาใกล้ ถนนสายหลักเริ่มติดขัด เพื่อนทั้งสี่คนหันมารอฟังความคิดเห็นจากคุณ คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "ตะโกนเรียกทุกคนมารวมกัน แล้วสั่งทันทีว่าใครเดินนำ ใครดูแลคนข้างหลัง",
+    "why": "นำกลุ่ม/วางแผนทันที",
+    "w": [
+     "E",
+     "J"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "เงียบไปครู่หนึ่ง กวาดตามองรอบตัว แล้วเลือกทางที่คนน้อยที่สุดตอนนั้น",
+    "why": "คิดในใจ/ปรับตามหน้างาน",
+    "w": [
+     "I",
+     "P"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "มองหาป้ายเส้นทางอพยพสึนามิริมถนน แล้วเดินตามลูกศรทันที",
+    "why": "ใช้ข้อมูลที่เห็นจริง/มีเหตุผล",
+    "w": [
+     "S",
+     "T"
+    ],
+    "effects": {
+     "health": 2,
+     "infection": -5,
+     "panic": -3
+    }
+   },
+   {
+    "key": "D",
+    "text": "จับมือเพื่อนทุกคนไว้ แล้วนึกถึงเนินสูงที่เคยเห็นตอนเดินเล่นเมื่อเช้า",
+    "why": "เชื่อมโยงภาพรวม/ห่วงทุกคน",
+    "w": [
+     "N",
+     "F"
+    ]
+   }
+  ]
+ },
+ {
+  "n": 2,
+  "title": "เส้นทางอพยพ",
+  "theme": "การเลือกเส้นทาง",
+  "note": "ระหว่างทาง แว่นพบแผนที่อพยพที่ระบุเส้นทางขึ้นเนินเขา แต่บอมกลับเห็นทางลัดผ่านอาคารใกล้เคียง แว่น: “ทางเนินเขามีเส้นทางอพยพที่ระบุไว้ชัดเจน” บอม: “แต่ทางนี้ใกล้กว่าตั้งเยอะ!” คุณจะเลือกอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "แย้งบอมตรง ๆ ว่าทางลัดผ่านตึก ถ้าน้ำมาถึงก่อนเราจะติดอยู่ข้างใน",
+    "why": "พูดออกมา/ใช้เหตุผล",
+    "w": [
+     "E",
+     "T"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "ไม่พูดอะไร แต่เดินไปทางที่เพื่อนส่วนใหญ่ดูสบายใจที่สุด",
+    "why": "เก็บความคิด/ใส่ใจความรู้สึกกลุ่ม",
+    "w": [
+     "I",
+     "F"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "เดินตามเส้นทางในแผนที่อพยพทีละจุดอย่างเคร่งครัด",
+    "why": "ยึดข้อมูลจริง/ทำตามแผน",
+    "w": [
+     "S",
+     "J"
+    ],
+    "effects": {
+     "health": 2,
+     "infection": -5,
+     "panic": -2
+    }
+   },
+   {
+    "key": "D",
+    "text": "ลองทางลัดของบอมก่อน ถ้าไปไม่ได้ค่อยวกกลับมาทางเนิน",
+    "why": "มองหาความเป็นไปได้/ยืดหยุ่น",
+    "w": [
+     "N",
+     "P"
+    ],
+    "effects": {
+     "health": -3,
+     "infection": 7,
+     "panic": 4
+    }
+   }
+  ]
+ },
+ {
+  "n": 3,
+  "title": "ผู้ประสบภัย",
+  "theme": "ทางแยกศีลธรรม",
+  "note": "ฟ้าพบเด็กคนหนึ่งพลัดหลงจากครอบครัวและกำลังร้องไห้ ฟ้า: “เราต้องช่วยเด็กคนนี้นะ!” เอก: “แต่เราต้องระวังเวลาและความปลอดภัยด้วย” คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "อุ้มเด็กขึ้นหลังทันที แล้วตะโกนถามหาพ่อแม่ของเด็กไปตลอดทาง",
+    "why": "ลงมือ+สื่อสาร/ตัดสินใจหน้างาน",
+    "w": [
+     "E",
+     "P"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "จูงมือเด็กไว้เงียบ ๆ แล้วเดินตามแผนเดิมต่อโดยไม่แวะที่ไหน",
+    "why": "เก็บตัว/ยึดแผน",
+    "w": [
+     "I",
+     "J"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "ปลอบเด็กให้หยุดร้อง ถามชื่อ และดูว่าบาดเจ็บตรงไหนหรือเปล่า",
+    "why": "ใส่ใจรายละเอียดตรงหน้า/เห็นใจ",
+    "w": [
+     "S",
+     "F"
+    ]
+   },
+   {
+    "key": "D",
+    "text": "คิดว่าทางที่ดีที่สุดคือพาเด็กขึ้นที่สูงไปด้วยก่อน แล้วค่อยตามหาครอบครัวที่ศูนย์อพยพ",
+    "why": "มองขั้นต่อไป/ใช้เหตุผล",
+    "w": [
+     "N",
+     "T"
+    ]
+   }
+  ]
+ },
+ {
+  "n": 4,
+  "title": "อาคารที่เสียหาย",
+  "theme": "การประเมินความเสี่ยง",
+  "note": "ทั้งกลุ่มพบอาคารสูงที่อาจใช้เป็นที่หลบภัย แต่ตัวอาคารมีรอยแตกร้าวจากแรงสั่นสะเทือน อ้วน: “ตรงนั้น! อาคารสูง น่าจะขึ้นไปหลบได้!” แว่น: “อย่าเพิ่งเข้าไป โครงสร้างอาจเสียหาย!” คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "ตะโกนถามคนที่ยืนอยู่หน้าตึกว่าข้างในเป็นอย่างไร มีใครขึ้นไปแล้วบ้าง",
+    "why": "หาข้อมูลจากคนอื่น/ข้อเท็จจริง",
+    "w": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "มองไปรอบ ๆ เงียบ ๆ แล้วนึกถึงตึกอีกหลังที่ดูแข็งแรงกว่าซึ่งอยู่ไม่ไกล",
+    "why": "คิดเอง/มองหาทางเลือกใหม่",
+    "w": [
+     "I",
+     "N"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "ตัดสินตามหลัก: ตึกร้าวเสี่ยงถล่ม ไปต่อตามเส้นทางขึ้นเนินทันที",
+    "why": "ใช้เหตุผล/ยึดแผน",
+    "w": [
+     "T",
+     "J"
+    ],
+    "effects": {
+     "health": 2,
+     "infection": -6,
+     "panic": -2
+    }
+   },
+   {
+    "key": "D",
+    "text": "เห็นอ้วนเหนื่อยมากแล้ว จึงยอมเข้าไปพักชั้นล่างก่อน ค่อยดูอีกทีว่าจะไปต่อไหม",
+    "why": "ห่วงเพื่อน/ตัดสินใจตามสถานการณ์",
+    "w": [
+     "F",
+     "P"
+    ],
+    "effects": {
+     "health": -6,
+     "infection": 9,
+     "panic": 3
+    }
+   }
+  ]
+ },
+ {
+  "n": 5,
+  "title": "ความขัดแย้ง",
+  "theme": "การจัดการความขัดแย้ง",
+  "note": "เอกและบอมเริ่มโต้เถียงกันเรื่องเส้นทางอพยพ บอม: “เลิกยึดติดกับแผนเดิมได้แล้ว!” เอก: “ถ้าไม่มีแผน เราจะเอาตัวรอดยังไง!” ฟ้า: “หยุดก่อน! เราต้องฟังกันทุกคน” คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "เข้าไปยืนกลางวง ให้ทั้งคู่พูดความรู้สึกออกมาทีละคน",
+    "why": "ไกล่เกลี่ย/ใส่ใจความรู้สึก",
+    "w": [
+     "E",
+     "F"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "ไม่เข้าไปเถียงด้วย แต่ชี้ให้ทุกคนดูว่าน้ำกำลังมาจากทางไหน แล้วให้ข้อเท็จจริงตัดสิน",
+    "why": "วางตัวเงียบ/ใช้เหตุผล",
+    "w": [
+     "I",
+     "T"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "ไม่สนว่าใครถูก ดูว่าตอนนี้ทางไหนโล่งที่สุดแล้วพาทุกคนไปทางนั้นเลย",
+    "why": "ดูสิ่งตรงหน้า/ปรับตัวไว",
+    "w": [
+     "S",
+     "P"
+    ]
+   },
+   {
+    "key": "D",
+    "text": "เสนอแผนใหม่ที่รวมข้อดีของทั้งสองฝ่าย แล้วให้ทุกคนตกลงก่อนออกเดิน",
+    "why": "คิดทางออกใหม่/วางแผนให้ชัด",
+    "w": [
+     "N",
+     "J"
+    ]
+   }
+  ]
+ },
+ {
+  "n": 6,
+  "title": "สัญญาณขอความช่วยเหลือ",
+  "theme": "การช่วยเหลือผู้อื่น",
+  "note": "แว่นสังเกตเห็นแสงไฟกะพริบจากอาคารใกล้เคียง คล้ายมีคนกำลังขอความช่วยเหลือ แว่น: “เห็นไหม! มีคนอยู่ข้างบน!” ฟ้า: “เราต้องหาทางช่วยพวกเขา” บอม: “แต่ทางเข้าอาคารดูไม่ค่อยปลอดภัยเลย” อ้วน: “ลองหาทางเข้าจากอีกฝั่งไหม?” คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "ตะโกนให้คนบนตึกได้ยิน แล้วคิดวิธีส่งสัญญาณบอกให้พวกเขารออยู่ข้างบนอย่าลงมา",
+    "why": "สื่อสาร/คิดวิธีใหม่",
+    "w": [
+     "E",
+     "N"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "จดจำตำแหน่งตึก ชั้น และสีของไฟไว้ เพื่อแจ้งเจ้าหน้าที่เมื่อไปถึงศูนย์",
+    "why": "สังเกตรายละเอียด/เก็บข้อมูลเงียบ ๆ",
+    "w": [
+     "I",
+     "S"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "ประเมินว่าเข้าไปเองเสี่ยงเกินไป จึงมองหาเจ้าหน้าที่หรือเรือกู้ภัยที่อยู่ใกล้ที่สุดแทน",
+    "why": "ใช้เหตุผล/ปรับแผนตามสถานการณ์",
+    "w": [
+     "T",
+     "P"
+    ],
+    "effects": {
+     "health": 0,
+     "infection": -5,
+     "panic": -3
+    }
+   },
+   {
+    "key": "D",
+    "text": "แบ่งทีมทันที สองคนอ้อมไปดูทางเข้าอีกฝั่ง ที่เหลือรออยู่บนที่สูง",
+    "why": "อยากช่วย/จัดระบบ",
+    "w": [
+     "F",
+     "J"
+    ],
+    "effects": {
+     "health": -4,
+     "infection": 7,
+     "panic": 2
+    }
+   }
+  ]
+ },
+ {
+  "n": 7,
+  "title": "แผนที่ไร้สัญญาณ",
+  "theme": "การปรับตัวเมื่อแผนล่ม",
+  "note": "โทรศัพท์ทุกเครื่องไม่มีสัญญาณ แผนที่ใช้งานไม่ได้ และเส้นทางเดิมถูกน้ำท่วม บอม: “แล้วตอนนี้จะเอายังไงต่อ?” แว่น: “เรายังประเมินเส้นทางจากสภาพแวดล้อมได้” เอก: “งั้นเราต้องวางแผนใหม่!” อ้วน: “ลองหาทางอื่นกันไหม?” คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "เรียกทุกคนมาตั้งจุดนัดพบ ถ้าใครพลัดหลงให้ไปเจอกันที่นั่น",
+    "why": "นำกลุ่ม/วางแผนรองรับ",
+    "w": [
+     "E",
+     "J"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "เงียบฟังเสียงรอบตัว แล้วเดินตามกลุ่มคนในพื้นที่ที่ดูรู้ทาง",
+    "why": "สังเกตเงียบ ๆ/ปรับตัว",
+    "w": [
+     "I",
+     "P"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "ดูจากสิ่งที่เห็น เนินไหนสูงสุด น้ำไหลมาทางไหน แล้วเลือกทางที่ห่างน้ำที่สุด",
+    "why": "ใช้ข้อมูลจริง/ใช้เหตุผล",
+    "w": [
+     "S",
+     "T"
+    ]
+   },
+   {
+    "key": "D",
+    "text": "ปลอบอ้วนกับบอมที่เริ่มเครียด แล้วชวนทุกคนนึกว่าเมื่อเช้าเดินผ่านจุดสูงตรงไหนมาบ้าง",
+    "why": "ห่วงใจเพื่อน/เชื่อมโยงความจำ",
+    "w": [
+     "N",
+     "F"
+    ]
+   }
+  ]
+ },
+ {
+  "n": 8,
+  "title": "ทรัพยากรที่เหลืออยู่",
+  "theme": "การจัดสรรทรัพยากร",
+  "note": "หลังเดินขึ้นเนินมาเกือบชั่วโมง น้ำดื่มและอาหารของกลุ่มเริ่มเหลือน้อย อ้วน: “ของเหลือแค่นี้เองเหรอ?” แว่น: “เราต้องจัดสรรให้เพียงพอจนกว่าจะถึงศูนย์อพยพ” ฟ้า: “ทุกคนแบ่งกันนะ อย่าให้ใครขาด” คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "ชวนทุกคนเอาของออกมากองรวมกัน แล้วแบ่งตามที่แต่ละคนหิวตอนนั้น",
+    "why": "ทำร่วมกัน/ยืดหยุ่น",
+    "w": [
+     "E",
+     "P"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "นับของเงียบ ๆ แล้วคิดในใจว่าแต่ละคนได้เท่าไรต่อชั่วโมง",
+    "why": "คิดคนเดียว/วางระบบ",
+    "w": [
+     "I",
+     "J"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "ให้น้ำกับคนที่บาดเจ็บหรือเหนื่อยที่สุดก่อน ตามสภาพที่เห็นตรงหน้า",
+    "why": "ดูสภาพจริง/เห็นใจ",
+    "w": [
+     "S",
+     "F"
+    ]
+   },
+   {
+    "key": "D",
+    "text": "เก็บน้ำไว้ส่วนหนึ่ง เผื่อที่ศูนย์อพยพก็ขาดแคลนเหมือนกัน",
+    "why": "คิดล่วงหน้า/ใช้เหตุผล",
+    "w": [
+     "N",
+     "T"
+    ]
+   }
+  ]
+ },
+ {
+  "n": 9,
+  "title": "ศูนย์อพยพ",
+  "theme": "การทำงานเป็นทีม",
+  "note": "ในที่สุดทั้งกลุ่มเดินทางถึงพื้นที่สูง และพบศูนย์อพยพที่มีผู้ประสบภัยจำนวนมาก ฟ้า: “มีคนต้องการความช่วยเหลือเยอะมากเลย” เอก: “เราต้องจัดระบบก่อน ทุกคนจะได้ช่วยกัน” แว่น: “ควรตรวจสอบจำนวนผู้ประสบภัยและทรัพยากรที่เหลือ” บอม: “งั้นแบ่งหน้าที่กันเลยไหม?” คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "อาสาไปช่วยเจ้าหน้าที่ลงทะเบียนผู้ประสบภัยทีละคน",
+    "why": "ทำงานกับผู้คน/งานจริงตรงหน้า",
+    "w": [
+     "E",
+     "S"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "สังเกตอยู่ห่าง ๆ ว่าศูนย์ยังขาดอะไร แล้วคิดวิธีแก้ที่คนอื่นอาจมองข้าม",
+    "why": "สังเกตเงียบ ๆ/มองภาพรวม",
+    "w": [
+     "I",
+     "N"
+    ]
+   },
+   {
+    "key": "C",
+    "text": "แบ่งหน้าที่ในทีม คนแจกน้ำ คนดูแลเด็ก คนตามหาครอบครัวของเด็กที่พามา",
+    "why": "ใช้เหตุผล/จัดระบบ",
+    "w": [
+     "T",
+     "J"
+    ]
+   },
+   {
+    "key": "D",
+    "text": "เดินไปนั่งข้างคนที่ร้องไห้อยู่คนเดียว แล้วช่วยตามที่เขาต้องการ",
+    "why": "เห็นใจ/ช่วยตามสถานการณ์",
+    "w": [
+     "F",
+     "P"
+    ]
+   }
+  ]
+ },
+ {
+  "n": 10,
+  "title": "การตัดสินใจครั้งสุดท้าย",
+  "theme": "บทสรุปชี้ชะตา",
+  "note": "เสียงประกาศแจ้งเตือนคลื่นระลอกใหม่ดังขึ้น เจ้าหน้าที่กำลังเตรียมเคลื่อนย้ายผู้ประสบภัยไปยังพื้นที่ปลอดภัยแห่งใหม่ เอก: “ทุกคนเตรียมตัว เราต้องไปต่อ!” แว่น: “รอฟังข้อมูลจากเจ้าหน้าที่ก่อน” บอม: “รออะไรอีก ไปเลยดิ!” ฟ้า: “เราต้องผ่านเรื่องนี้ไปด้วยกันนะ” อ้วน: “เอาล่ะ ไปกันต่อ!” คุณจะทำอย่างไร?",
+  "options": [
+   {
+    "key": "A",
+    "text": "รวมเพื่อนกับเด็กที่ช่วยมาให้อยู่ด้วยกัน แล้วให้กำลังใจทุกคนระหว่างรอ",
+    "why": "ดูแลกลุ่ม/ให้กำลังใจ",
+    "w": [
+     "E",
+     "F"
+    ]
+   },
+   {
+    "key": "B",
+    "text": "ทบทวนในใจ คลื่นลูกหลังอาจใหญ่กว่าลูกแรก ไม่มีเหตุผลที่จะลงไปที่ต่ำตอนนี้",
+    "why": "คิดเอง/ใช้เหตุผล",
+    "w": [
+     "I",
+     "T"
+    ],
+    "effects": {
+     "health": 2,
+     "infection": -6,
+     "panic": -3
+    }
+   },
+   {
+    "key": "C",
+    "text": "ทำตามที่เจ้าหน้าที่บอกตรงหน้า และพร้อมเปลี่ยนตามประกาศใหม่ทุกครั้ง",
+    "why": "ยึดข้อมูลจริง/ปรับตัว",
+    "w": [
+     "S",
+     "P"
+    ],
+    "effects": {
+     "health": 3,
+     "infection": -6,
+     "panic": -4
+    }
+   },
+   {
+    "key": "D",
+    "text": "คิดล่วงหน้าว่าศูนย์ใหม่จะต้องใช้อะไร แล้วจัดของในเป้ให้พร้อมก่อนออกเดิน",
+    "why": "มองข้างหน้า/วางแผน",
+    "w": [
+     "N",
+     "J"
+    ]
+   }
+  ]
+ }
+];
+
+const DISASTER_BANK = Object.fromEntries(["ek", "waen", "fah", "bom", "uan"].map((c) => [c, DISASTER_QUESTIONS]));
+const LOCATIONS_DISASTER = {
+  1: { key: "d_street", name: "ถนนเลียบชายหาด", tint: "#3a4a52" },
+  2: { key: "d_junction", name: "ทางแยกหน้าป้ายอพยพ", tint: "#38474f" },
+  3: { key: "d_street", name: "ถนนกลางเมือง", tint: "#3c464c" },
+  4: { key: "d_tower", name: "หน้าอาคารสูง", tint: "#3a4248" },
+  5: { key: "d_flood", name: "ถนนที่น้ำเริ่มท่วม", tint: "#2f4450" },
+  6: { key: "d_flood", name: "ย่านอาคารริมน้ำ", tint: "#2b3f4c" },
+  7: { key: "d_hill", name: "เชิงเนินเขา", tint: "#3a4a3c" },
+  8: { key: "d_hill", name: "ทางขึ้นเนิน", tint: "#454234" },
+  9: { key: "d_shelter", name: "ศูนย์อพยพบนเนินเขา", tint: "#46403a" },
+  10: { key: "d_shelter", name: "ศูนย์อพยพ · พลบค่ำ", tint: "#2c3040" },
+};
+const SITUATION_DISASTER = {
+  1: { tags: ["navigate", "command", "calm"], ally: null },
+  2: { tags: ["navigate", "light", "command"], ally: null },
+  3: { tags: ["rescue", "calm", "heal", "energy"], ally: "เด็กที่พลัดหลงจากครอบครัว" },
+  4: { tags: ["navigate", "light", "calm"], ally: null },
+  5: { tags: ["calm", "command", "energy"], ally: "เอกกับบอมที่กำลังเถียงกัน" },
+  6: { tags: ["light", "command", "rescue"], ally: null },
+  7: { tags: ["navigate", "light", "command"], ally: null },
+  8: { tags: ["energy", "heal", "calm"], ally: "เพื่อนที่เหนื่อยและหิวน้ำ" },
+  9: { tags: ["heal", "calm", "energy", "command"], ally: "ผู้ประสบภัยในศูนย์อพยพ" },
+  10: { tags: ["command", "calm", "navigate", "energy"], ally: null },
+};
+// ของที่ได้ระหว่างทาง (เหมือนกันทุกตัวละคร)
+const LOOT_DISASTER = { 3: { C: ["gauze"] }, 8: { D: ["water"] }, 9: { A: ["water"], C: ["gauze"] } };
+const ITEM_DESC_DISASTER = {
+  whistle: "เป่าเรียกทีมให้รวมกลุ่มกลางฝูงชน หรือส่งสัญญาณขอความช่วยเหลือ",
+  laser: "ส่องสัญญาณบอกตำแหน่งให้หน่วยกู้ภัย หรือส่องทางตอนไฟดับ",
+  cutter: "ตัดเชือก สายรัด หรือเศษผ้าที่พันติดสิ่งกีดขวาง",
+};
+HAZARDS.disaster = {
+  3: { icon: "zap", title: "อาฟเตอร์ช็อก! สายไฟขาดร่วงลงมากลางถนน", desc: "ฝูงคนแตกตื่นวิ่งสวนกันไปมา ทีมกำลังจะถูกกระแสคนพัดแยกจากกัน",
+    best: ["command", "navigate"], ok: ["light", "calm", "energy", "cut"],
+    win: { panic: -10, infection: -6 }, part: { panic: -5, infection: -2 }, bare: { panic: 6, infection: 4 }, fail: { panic: 12, infection: 8, health: -6 },
+    winText: "ทุกคนได้ยินสัญญาณและมารวมกันได้ทัน หลบสายไฟแล้วเดินต่อเป็นแถวเดียว",
+    partText: "ทีมกลับมารวมกันได้ แต่ต้องอ้อมไกลกว่าเดิมเพื่อหลบสายไฟ",
+    bareText: "ทุกคนจับมือกันแน่นแล้วฝ่าฝูงคนออกมา เหนื่อยและเสียเวลาไปมาก",
+    failText: "ทีมถูกฝูงคนพัดแยกกัน กว่าจะตามหากันเจอ น้ำก็เริ่มไหลเข้ามาในเมืองแล้ว" },
+  6: { icon: "heart-pulse", title: "เศษกระจกใต้น้ำบาดขาเพื่อน!", desc: "เลือดไหลไม่หยุด น้ำสกปรกอาจทำให้แผลติดเชื้อ และทางขึ้นเนินยังอีกไกล",
+    best: ["heal"], ok: ["calm", "energy", "cut"],
+    win: { health: 12, panic: -6 }, part: { health: 5, panic: -3 }, bare: { health: -4, infection: 5 }, fail: { health: -10, infection: 8, panic: 6 },
+    winText: "ล้างแผลและพันไว้แน่นหนา เพื่อนเดินลุยน้ำต่อได้โดยไม่เจ็บมาก",
+    partText: "เลือดหยุดไหล แต่เพื่อนต้องเดินช้าลง ทีมต้องคอยประคอง",
+    bareText: "ใช้ผ้าเสื้อมัดแผลไว้ก่อน พอเดินต่อได้ แต่แผลยังเปียกน้ำตลอดทาง",
+    failText: "ไม่มีใครทันทำอะไร แผลแช่น้ำสกปรกจนเพื่อนเริ่มเดินไม่ไหว" },
+  9: { icon: "lamp", title: "ไฟดับทั้งศูนย์อพยพ!", desc: "ความมืดปกคลุมทั้งเนิน เด็ก ๆ เริ่มร้องไห้ และผู้คนเริ่มตะโกนหากัน",
+    best: ["light", "command"], ok: ["calm", "energy", "heal"],
+    win: { panic: -12, infection: -6 }, part: { panic: -5, infection: -3 }, bare: { panic: 6, infection: 4 }, fail: { panic: 12, infection: 8, health: -6 },
+    winText: "แสงไฟและเสียงสัญญาณช่วยให้ทุกคนสงบลง เจ้าหน้าที่จัดแถวได้อีกครั้ง",
+    partText: "ผู้คนรอบตัวสงบลงบ้าง แต่อีกฝั่งของศูนย์ยังวุ่นวายอยู่",
+    bareText: "ทีมจับมือนั่งรวมกัน ช่วยกันปลอบเด็ก ๆ จนไฟกลับมา",
+    failText: "ความมืดทำให้ผู้คนแตกตื่น มีคนเบียดกันจนล้ม ทีมเกือบพลัดหลงกัน" },
+};
+// ฉากเล่าเรื่องคั่นระหว่างข้อ (key = index ข้อที่เพิ่งตอบเสร็จ · ยังไม่มีเสียงพากย์ ใช้ซับ + เสียงประกอบ)
+const DISASTER_INTERLUDES = {
+  0: { art: "tx0", lines: [
+    { at: 0, sfx: "steps", sub: "ทั้งห้าคนวิ่งออกจากชายหาด มุ่งหน้าเข้าเมือง" },
+    { at: 3300, sfx: "crowd", sub: "ถนนทุกสายเต็มไปด้วยรถที่ติดแน่น และผู้คนที่วิ่งสวนกันไปมา" },
+    { at: 7000, sfx: "paper", sub: "ที่ทางแยกข้างหน้า มีแผนที่เส้นทางอพยพติดอยู่บนกำแพง" },
+  ], end: 10600 },
+  1: { art: "tx1", lines: [
+    { at: 0, sfx: "steps", sub: "ทุกคนเร่งฝีเท้าตามเส้นทางที่เลือก" },
+    { at: 3200, sfx: "crowd", sub: "ระหว่างทาง เสียงร้องไห้ดังขึ้นจากริมถนน" },
+    { at: 6400, sfx: "chill", sub: "เด็กคนหนึ่งยืนอยู่คนเดียว มองหาพ่อแม่ท่ามกลางฝูงคน" },
+  ], end: 10000 },
+  2: { art: "tx2", lines: [
+    { at: 0, sfx: "surf", sub: "เสียงคลื่นดังกระหึ่มมาจากด้านหลัง" },
+    { at: 3300, sfx: "surf", sub: "น้ำทะเลเริ่มทะลักเข้าท่วมถนนเลียบชายหาด" },
+    { at: 6800, sfx: "quake", sub: "อาคารสูงหลังหนึ่งตั้งอยู่ข้างหน้า แต่ผนังมีรอยร้าวยาวจากแผ่นดินไหว" },
+  ], end: 10600 },
+  3: { art: "tx3", lines: [
+    { at: 0, sfx: "surf", sub: "น้ำเริ่มไหลบ่าเข้ามาจนถึงข้อเท้า" },
+    { at: 3300, sfx: "steps", sub: "ทุกคนเดินลุยน้ำต่อไปโดยไม่มีใครพูดอะไร" },
+    { at: 6600, sfx: "shout", sub: "จนกระทั่งเอกกับบอมหยุดเดิน แล้วหันมาเถียงกันเสียงดัง" },
+  ], end: 10200 },
+  4: { art: "tx4", lines: [
+    { at: 0, sfx: "steps", sub: "ทั้งกลุ่มเดินลุยน้ำต่อ ผ่านอาคารที่จมอยู่ครึ่งหลัง" },
+    { at: 3400, sfx: "surf", sub: "ระดับน้ำสูงขึ้นจนถึงเข่า" },
+    { at: 6600, sfx: "alert", sub: "แล้วแสงไฟดวงหนึ่งก็กะพริบขึ้นบนชั้นสามของอาคารฝั่งตรงข้าม" },
+  ], end: 10200 },
+  5: { art: "tx5", lines: [
+    { at: 0, sfx: "nosignal", sub: "ไม่นานนัก สัญญาณโทรศัพท์ก็หายไปทั้งหมด" },
+    { at: 3400, sfx: "surf", sub: "ถนนที่เคยใช้ถูกน้ำท่วมจนมองไม่เห็นทาง" },
+    { at: 6600, sfx: "wind", sub: "ข้างหน้ามีเพียงเนินเขาสีเขียวที่อยู่ไกลออกไป" },
+  ], end: 10000 },
+  6: { art: "tx6", lines: [
+    { at: 0, sfx: "steps", sub: "ทั้งกลุ่มเริ่มเดินขึ้นเนิน น้ำเบื้องล่างยังคงซัดเข้าออก" },
+    { at: 3400, sfx: "wind", sub: "ขาเริ่มล้า คอเริ่มแห้ง" },
+    { at: 6400, sfx: "paper", sub: "อ้วนเปิดเป้ดูของที่เหลืออยู่ แล้วถอนหายใจ" },
+  ], end: 9800 },
+  7: { art: "tx7", lines: [
+    { at: 0, sfx: "steps", sub: "บนยอดเนิน มีเต็นท์สีฟ้าตั้งเรียงกันอยู่หลายหลัง" },
+    { at: 3300, sfx: "shout", sub: "เจ้าหน้าที่ตะโกนเรียกผู้ประสบภัยให้มารวมกัน" },
+    { at: 6600, sfx: "murmur", sub: "ที่นี่คือศูนย์อพยพ" },
+  ], end: 9800 },
+  8: { art: "tx8", lines: [
+    { at: 0, sfx: "wind", sub: "ฟ้าเริ่มมืด ผู้คนในศูนย์อพยพค่อย ๆ สงบลง" },
+    { at: 3400, sfx: "alert", sub: "แต่แล้ว เสียงประกาศจากโทรโข่งก็ดังขึ้นอีกครั้ง" },
+    { at: 6800, sfx: "alert", sub: "“มีรายงานคลื่นระลอกใหม่ ขอให้ทุกคนเตรียมเคลื่อนย้าย”" },
+  ], end: 10800 },
+};
+// อินโทร 6 ฉาก (ยังไม่มีเสียงพากย์ · ซับ + เสียงประกอบ)
+const INTRO_DISASTER = [
+  { cam: "14:37 น. · เมืองชายฝั่ง", title: "บ่ายวันหยุด", desc: "ค่ายอาสาที่เมืองชายฝั่ง", bg: "linear-gradient(180deg,#8fc6e8,#e9d9b0 80%)", dur: 11000, art: "t1",
+    steps: [{ at: 0, sfx: "ambient", label: "ชายหาด", sub: "บ่ายวันหยุดที่เต็มไปด้วยนักท่องเที่ยว ทั้งห้าคนมาออกค่ายอาสาที่เมืองชายฝั่งแห่งนี้" },
+            { at: 4600, sfx: "quake", beat: 1, jolt: 1.2, label: "แผ่นดินไหว", sub: "ทุกอย่างดำเนินไปตามปกติ จนกระทั่งพื้นดินเริ่มสั่นสะเทือนอย่างรุนแรง" },
+            { at: 8400, sfx: "quake", beat: 2, jolt: 1.6, label: "ครืน!", sub: "ครืนนนน!" }] },
+  { cam: "เสียงตามสาย · ทั่วเมือง", title: "ประกาศฉุกเฉิน", desc: "อพยพออกจากชายฝั่งทันที", bg: "linear-gradient(180deg,#a9b6bf,#3a4a52 80%)", dur: 9000, art: "t2",
+    steps: [{ at: 0, sfx: "siren", label: "ไซเรน", sub: "เสียงประกาศฉุกเฉินดังขึ้นทั่วเมือง" },
+            { at: 3200, beat: 1, sfx: "alert", label: "ประกาศ", sub: "“ตรวจพบแผ่นดินไหวใต้ทะเล ขอให้ประชาชนอพยพออกจากพื้นที่ชายฝั่งทันที!”" }] },
+  { cam: "ชายหาด · 14:41 น.", title: "ทะเลถอยห่าง", desc: "น้ำทะเลลดลงผิดธรรมชาติ", bg: "linear-gradient(180deg,#9cc3dc,#cdb98a 80%)", dur: 9400, art: "t3", quiet: true,
+    steps: [{ at: 0, sfx: "wind", label: "น้ำลด", sub: "แว่นมองไปที่ชายหาด น้ำทะเลกำลังลดลงอย่างรวดเร็ว จนเห็นพื้นทรายและโขดหินที่ไม่เคยโผล่พ้นน้ำ" },
+            { at: 5000, beat: 1, sfx: "shout", label: "แว่นตะโกน", sub: "แว่น: “ทุกคน! น้ำลดผิดปกติแบบนี้ คือสัญญาณสึนามิ!”" }] },
+  { cam: "ขอบฟ้า", title: "คลื่นยักษ์", desc: "กำลังเคลื่อนเข้าหาเมือง", bg: "linear-gradient(180deg,#5c6f80,#2c3a44 80%)", dur: 10400, art: "t4",
+    steps: [{ at: 0, sfx: "screamWind", label: "เสียงกรีดร้อง", sub: "ทันใดนั้น เสียงกรีดร้องก็ดังขึ้นทั่วชายหาด" },
+            { at: 3000, beat: 1, sfx: "surf", jolt: 0.6, label: "คลื่น", sub: "คลื่นยักษ์ปรากฏขึ้นสุดขอบฟ้า และกำลังเคลื่อนเข้าหาเมืองอย่างรวดเร็ว" },
+            { at: 7000, beat: 2, sfx: "crowd", label: "โกลาหล", sub: "ผู้คนแตกตื่น รถยนต์ชนกัน ถนนเต็มไปด้วยความโกลาหล" }] },
+  { cam: "ถนนเลียบชายหาด", title: "ขึ้นที่สูง!", desc: "ต้องหนีเดี๋ยวนี้", bg: "linear-gradient(180deg,#7a8a94,#2c3a44 80%)", dur: 9800, art: "t5",
+    steps: [{ at: 0, sfx: "shout", label: "เอกสั่ง", sub: "เอก: “ทุกคนรีบขึ้นที่สูง! เราต้องหนีเดี๋ยวนี้!”" },
+            { at: 4200, beat: 1, sfx: "steps", label: "ออกวิ่ง", sub: "บอมออกวิ่งนำไปก่อนแล้ว ส่วนอ้วนยังกำถุงขนมไว้แน่นโดยไม่รู้ตัว" }] },
+  { cam: "กลางถนน", title: "วันที่ทะเลกลืนกินเมือง", desc: "ช่วยคนอื่น หรือรีบเอาตัวรอด?", bg: "linear-gradient(180deg,#5c6f80,#1c262e 80%)", dur: null, art: "t6", quiet: true,
+    loop: true, loopSfx: "surf", loopMs: 4600, loopAt: 15000,
+    steps: [{ at: 0, sfx: "chill", label: "ฟ้าหยุด", sub: "แต่ระหว่างทาง ฟ้าหยุดชะงัก เมื่อเห็นเด็กคนหนึ่งยืนร้องไห้อยู่กลางถนน พลัดหลงจากครอบครัว" },
+            { at: 5200, beat: 1, sfx: "surf", label: "เสียงคลื่น", sub: "เสียงคลื่นดังใกล้เข้ามาทุกวินาที พวกเขามีเวลาเพียงไม่กี่นาทีในการตัดสินใจ" },
+            { at: 10000, beat: 2, sfx: "heartbeat", label: "ตัดสินใจ", sub: "จะเลือกช่วยเหลือผู้อื่น หรือรีบหาทางเอาชีวิตรอด? การตัดสินใจครั้งนี้อาจเปลี่ยนชะตาของทุกคนไปตลอดกาล" }] },
+];
+
+/* ---------- ฉากของสถานการณ์สึนามิ (SVG) ---------- */
+const DSKY = { day: ["#7fb8dc", "#dceff8"], storm: ["#56697a", "#aab7c0"], dusk: ["#3b4a66", "#d08e5c"], night: ["#0e1626", "#26344c"], dawn: ["#9cc3dc", "#f6d4a8"] };
+function DSky({ tone = "day" }) {
+  const [a, b] = DSKY[tone] || DSKY.day;
+  const id = "dsky-" + tone;
+  return (
+    <g>
+      <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={a} /><stop offset="1" stopColor={b} /></linearGradient></defs>
+      <rect width="1600" height="900" fill={`url(#${id})`} />
+      {tone === "day" && <circle cx="1280" cy="150" r="70" fill="#fff4c8" opacity=".9" />}
+      {tone === "dawn" && <circle cx="300" cy="420" r="90" fill="#ffe2a8" opacity=".85" />}
+      {tone === "dusk" && <circle cx="1250" cy="430" r="80" fill="#f2a35a" opacity=".7" />}
+      {tone === "night" && [[200, 90], [520, 150], [880, 70], [1180, 130], [1450, 60]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="2.5" fill="#dfe8f6" opacity=".8" />)}
+      {[[260, 150, 1], [760, 110, 1.3], [1100, 190, 0.9]].map(([x, y, k], i) => (
+        <motion.g key={i} animate={{ x: [0, 40, 0] }} transition={loopT(18 + i * 4)} opacity={tone === "night" ? 0.15 : tone === "storm" ? 0.7 : 0.55}>
+          <ellipse cx={x} cy={y} rx={110 * k} ry={26 * k} fill={tone === "storm" ? "#7a8894" : "#fff"} />
+          <ellipse cx={x + 60 * k} cy={y - 18 * k} rx={70 * k} ry={24 * k} fill={tone === "storm" ? "#7a8894" : "#fff"} />
+        </motion.g>
+      ))}
+    </g>
+  );
+}
+function Palm({ x, y, k = 1, flip = false }) {
+  return (
+    <motion.g transform={`translate(${x} ${y}) scale(${flip ? -k : k} ${k})`}>
+      <path d="M0 0 Q18 -120 -10 -260" stroke="#7a5a3a" strokeWidth="18" fill="none" strokeLinecap="round" />
+      <motion.g animate={{ rotate: [-3, 3, -3] }} transition={loopT(3.4)} style={{ originX: 0.5, originY: 0.5 }}>
+        <rect x="-12" y="-272" width="4" height="4" fill="none" />
+        {[[-140, -230], [-120, -300], [-20, -330], [80, -310], [130, -240]].map(([px, py], i) => (
+          <path key={i} d={`M-10 -262 Q${(px - 10) / 2} ${py - 30} ${px} ${py}`} stroke="#3f7a3a" strokeWidth="16" fill="none" strokeLinecap="round" />
+        ))}
+        <circle cx="-14" cy="-258" r="9" fill="#5a3f22" /><circle cx="-2" cy="-252" r="9" fill="#5a3f22" />
+      </motion.g>
+    </motion.g>
+  );
+}
+function Umbrella({ x, y, c = "#e5372c" }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <line x1="0" y1="0" x2="0" y2="-120" stroke="#5a4a3a" strokeWidth="5" />
+      <path d="M-90 -110 Q0 -170 90 -110 Z" fill={c} />
+      <path d="M-30 -112 Q0 -160 30 -112 Z" fill="#f4efe2" opacity=".85" />
+    </g>
+  );
+}
+// ทะเล + ชายหาด · sea: "calm" | "recede" | "wave" · wave = ความสูงคลื่น 0–1
+function SceneCoast({ sea = "calm", wave = 0, tone = "day", crowd = false, children }) {
+  const horizon = 430;
+  const shore = sea === "recede" || sea === "wave" ? 520 : 610;
+  return (
+    <g>
+      <DSky tone={tone} />
+      <rect y={horizon} width="1600" height={shore - horizon} fill="#2f7fa8" />
+      <motion.rect y={horizon} width="1600" height="16" fill="#5aa6c8" animate={{ opacity: [0.4, 0.8, 0.4] }} transition={loopT(3)} />
+      {sea === "recede" || sea === "wave" ? (
+        <g>
+          <rect y={shore} width="1600" height={660 - shore} fill="#b39d72" />
+          {[[220, 570], [520, 600], [880, 560], [1180, 610], [1420, 580]].map(([x, y], i) => <ellipse key={i} cx={x} cy={y} rx={50 + (i % 2) * 30} ry="14" fill="#6e6a62" />)}
+          {[[360, 590], [700, 620], [1020, 590]].map(([x, y], i) => (
+            <motion.path key={"f" + i} d={`M${x} ${y} q10 -8 20 0 q-10 8 -20 0 M${x + 20} ${y} l8 -6 l0 12 Z`} fill="#c8d2d8" animate={{ y: [0, -6, 0] }} transition={loopT(0.6 + i * 0.2)} />
+          ))}
+        </g>
+      ) : (
+        <motion.path d={`M0 ${shore} Q200 ${shore - 12} 400 ${shore} T800 ${shore} T1200 ${shore} T1600 ${shore} V${shore + 14} H0 Z`} fill="#e9f4f8" opacity=".75"
+          animate={{ x: [0, -60, 0] }} transition={loopT(5)} />
+      )}
+      <rect y="660" width="1600" height="240" fill="#e6d3a6" />
+      <rect y="660" width="1600" height="10" fill="#d4bf8e" />
+      {wave > 0 && (
+        <motion.g initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 1.6, ease: "easeOut" }}>
+          <path d={`M0 ${horizon + 6} L0 ${horizon - 250 * wave} Q300 ${horizon - 300 * wave} 620 ${horizon - 260 * wave} Q980 ${horizon - 330 * wave} 1300 ${horizon - 270 * wave} Q1480 ${horizon - 250 * wave} 1600 ${horizon - 290 * wave} L1600 ${horizon + 6} Z`} fill="#1d4f6a" />
+          <motion.path d={`M0 ${horizon - 250 * wave} Q300 ${horizon - 300 * wave} 620 ${horizon - 260 * wave} Q980 ${horizon - 330 * wave} 1300 ${horizon - 270 * wave} Q1480 ${horizon - 250 * wave} 1600 ${horizon - 290 * wave}`}
+            stroke="#f4fbff" strokeWidth={10 + 16 * wave} fill="none" strokeLinecap="round" animate={{ opacity: [0.7, 1, 0.7] }} transition={loopT(1.2)} />
+          <Particles seed={311} count={20} area={[0, horizon - 340 * wave, 1600, 120]} dist={60} color="#e9f6fb" opacity={0.7} dur={[2, 4]} />
+        </motion.g>
+      )}
+      <Palm x={110} y={720} k={1.15} />
+      <Palm x={1500} y={730} k={1.05} flip />
+      <Umbrella x={420} y={760} c="#e5372c" />
+      <Umbrella x={1180} y={770} c="#f2a33a" />
+      {/* หอไลฟ์การ์ด */}
+      <g transform="translate(1320 700)">
+        <path d="M-40 0 L-30 -110 M40 0 L30 -110" stroke="#c9c2b0" strokeWidth="8" />
+        <rect x="-50" y="-160" width="100" height="56" fill="#e5372c" /><rect x="-60" y="-172" width="120" height="16" fill="#f4efe2" />
+      </g>
+      {crowd && [[200, 800, 1, 0], [520, 830, -1, 0.4], [900, 810, 1, 0.8], [1250, 840, -1, 0.2], [700, 860, 1, 1.1]].map(([x, y, dir, d], i) => (
+        <Runner key={i} x={x} y={y} s={1.1} dir={dir} delay={d} dist={700} dur={2.2} />
+      ))}
+      {children}
+    </g>
+  );
+}
+// เด็กที่พลัดหลง (วาดเอง · ไม่มีภาพจริง)
+function LostChild({ x, y, s = 1, crying = true }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <ellipse cx="0" cy="4" rx="46" ry="9" fill="#000" opacity=".3" />
+      <motion.g animate={{ y: [0, -3, 0] }} transition={loopT(0.9)}>
+        <rect x="-22" y="-70" width="16" height="70" rx="6" fill="#3a4a6a" /><rect x="6" y="-70" width="16" height="70" rx="6" fill="#3a4a6a" />
+        <rect x="-32" y="-150" width="64" height="88" rx="16" fill="#f2c94c" />
+        <path d="M-32 -136 l-22 46 M32 -136 l20 44" stroke="#f0cfb4" strokeWidth="14" strokeLinecap="round" />
+        <circle cx="0" cy="-186" r="40" fill="#f0cfb4" />
+        <path d="M-40 -194 q6 -44 40 -40 q36 -2 40 40 q-14 -16 -40 -18 q-26 2 -40 18 Z" fill="#2a1d14" />
+        <path d="M-16 -182 q6 -6 12 0 M6 -182 q6 -6 12 0" stroke="#2a1d14" strokeWidth="3.5" fill="none" />
+        <path d="M-10 -162 q10 -8 20 0" stroke="#7a3a2a" strokeWidth="4" fill="none" />
+        {crying && [[-12, -176], [14, -176]].map(([cx, cy], i) => (
+          <motion.circle key={i} cx={cx} cy={cy} r="4" fill="#7fc6ec" animate={{ cy: [cy, cy + 26], opacity: [1, 0] }} transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.45 }} />
+        ))}
+      </motion.g>
+    </g>
+  );
+}
+// เจ้าหน้าที่กู้ภัย (เสื้อกั๊กสีส้ม)
+function Rescuer({ x, y, s = 1, flip = false, megaphone = false }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${flip ? -s : s} ${s})`}>
+      <ellipse cx="0" cy="4" rx="70" ry="12" fill="#000" opacity=".3" />
+      <rect x="-30" y="-120" width="24" height="120" rx="8" fill="#2f3a4a" /><rect x="6" y="-120" width="24" height="120" rx="8" fill="#2f3a4a" />
+      <rect x="-46" y="-260" width="92" height="146" rx="18" fill="#3f5a7a" />
+      <path d="M-46 -250 h92 v110 h-92 Z" fill="#f2792a" /><path d="M-46 -200 h92 M-46 -170 h92" stroke="#f4f0e0" strokeWidth="8" />
+      <circle cx="0" cy="-300" r="40" fill="#e3b896" />
+      <path d="M-44 -306 q4 -46 44 -46 q40 0 44 46 Z" fill="#f2c94c" /><rect x="-50" y="-312" width="100" height="10" rx="4" fill="#e0b23a" />
+      {megaphone ? (
+        <g><path d="M40 -230 l70 -24" stroke="#e3b896" strokeWidth="18" strokeLinecap="round" />
+          <path d="M100 -268 l60 -30 v60 Z" fill="#e5372c" /><rect x="92" y="-262" width="16" height="22" fill="#c92a1f" /></g>
+      ) : <path d="M40 -230 l30 90" stroke="#e3b896" strokeWidth="18" strokeLinecap="round" />}
+    </g>
+  );
+}
+// ป้ายเส้นทางอพยพสึนามิ (ฟ้า-ขาว · รูปคลื่น + คนวิ่งขึ้นเนิน)
+function EvacSign({ x, y, k = 1, arrow = "right" }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${k})`}>
+      <rect x="-8" y="0" width="16" height="180" fill="#8a9298" />
+      <rect x="-110" y="-150" width="220" height="150" rx="10" fill="#1f5fa8" stroke="#f4f6f8" strokeWidth="6" />
+      <path d="M-90 -40 q30 -50 60 -10 q20 26 40 -8" stroke="#f4f6f8" strokeWidth="10" fill="none" strokeLinecap="round" />
+      <path d="M10 -110 l50 -16 l40 60" stroke="#f4f6f8" strokeWidth="8" fill="none" />
+      <circle cx="40" cy="-92" r="8" fill="#f4f6f8" />
+      <path d={arrow === "right" ? "M30 -24 h56 l-16 -14 M86 -24 l-16 14" : "M86 -24 h-56 l16 -14 M30 -24 l16 14"} stroke="#f2d23a" strokeWidth="8" fill="none" strokeLinecap="round" />
+      <text x="0" y="-122" textAnchor="middle" fontSize="20" fontWeight="700" fill="#f4f6f8" fontFamily="IBM Plex Sans Thai, sans-serif">เส้นทางหนีสึนามิ</text>
+    </g>
+  );
+}
+function Car({ x, y, c = "#c9433a", flip = false, blink = true }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${flip ? -1 : 1} 1)`}>
+      <rect x="-90" y="-60" width="180" height="50" rx="14" fill={c} />
+      <path d="M-56 -60 l20 -36 h76 l24 36 Z" fill={c} /><path d="M-44 -62 l14 -26 h28 v26 Z M8 -62 v-26 h26 l16 26 Z" fill="#bfe0ec" opacity=".85" />
+      <circle cx="-52" cy="-10" r="18" fill="#1c1c1c" /><circle cx="52" cy="-10" r="18" fill="#1c1c1c" />
+      {blink && <motion.rect x="80" y="-52" width="12" height="10" fill="#f2a33a" animate={{ opacity: [1, 0.1, 1] }} transition={{ duration: 0.8, repeat: Infinity }} />}
+    </g>
+  );
+}
+// ระดับน้ำท่วม (ทับหน้าตัวละคร โปร่งแสง = เหมือนยืนลุยน้ำ)
+function FloodWater({ level = 0.2, dark = false }) {
+  if (level <= 0) return null;
+  const top = 900 - level * 330;
+  return (
+    <g pointerEvents="none">
+      <motion.path d={`M-100 ${top} Q100 ${top - 14} 300 ${top} T700 ${top} T1100 ${top} T1500 ${top} T1900 ${top} V900 H-100 Z`} fill={dark ? "#1d3a4a" : "#3b6f86"} opacity=".72"
+        animate={{ x: [0, -200, 0] }} transition={loopT(6)} />
+      <motion.path d={`M-100 ${top} Q100 ${top - 14} 300 ${top} T700 ${top} T1100 ${top} T1500 ${top} T1900 ${top}`} stroke="#d8eef6" strokeWidth="5" fill="none" opacity=".7"
+        animate={{ x: [0, -200, 0] }} transition={loopT(6)} />
+      {[[300, 0], [900, 1], [1350, 2]].map(([x, i]) => (
+        <motion.rect key={i} x={x} y={top + 30} width={60 - i * 10} height="12" rx="4" fill={["#7a5a3a", "#d0d6da", "#e5372c"][i]} opacity=".85"
+          animate={{ x: [x, x + 120, x], rotate: [0, 6, 0] }} transition={loopT(7 + i)} />
+      ))}
+    </g>
+  );
+}
+// เมืองชายฝั่ง · chaos = รถติด/คนวิ่ง · water = ระดับน้ำ 0–1 · cracked = ตึกร้าว · beacon = แสงไฟขอความช่วยเหลือ
+function SceneTown({ tone = "day", chaos = false, water = 0, sign = false, cracked = false, beacon = false, pole = false, children }) {
+  const shops = [[0, "#d9c7a0"], [210, "#9fc3c9"], [420, "#e3b58a"], [630, "#c9d3a6"], [840, "#d8a8a0"], [1050, "#a8b8d8"], [1260, "#e2d29a"]];
+  return (
+    <g>
+      <DSky tone={tone} />
+      <rect y="380" width="1600" height="40" fill="#2f7fa8" opacity=".6" />
+      {shops.map(([x, c], i) => (
+        <g key={i}>
+          <rect x={x} y={300 + (i % 3) * 20} width="200" height={360 - (i % 3) * 20} fill={c} />
+          <rect x={x} y={300 + (i % 3) * 20} width="200" height="14" fill="#00000022" />
+          {[0, 1].map((r) => [0, 1, 2].map((cc) => <rect key={r + "-" + cc} x={x + 22 + cc * 60} y={350 + (i % 3) * 20 + r * 90} width="40" height="54" fill="#f4f0e2" opacity=".75" />))}
+          <path d={`M${x} 560 h200 l-14 36 h-172 Z`} fill={["#e5372c", "#2f7fa8", "#f2a33a", "#84a65a"][i % 4]} />
+          <rect x={x + 60} y="600" width="80" height="60" fill="#3a3430" />
+        </g>
+      ))}
+      {cracked && (
+        <g>
+          <rect x="1150" y="80" width="300" height="580" fill="#9aa2a8" />
+          {Array.from({ length: 8 }, (_, r) => [0, 1, 2, 3].map((cc) => <rect key={r + "-" + cc} x={1172 + cc * 70} y={110 + r * 64} width="46" height="40" fill="#cfd8de" opacity=".8" />))}
+          <path d="M1290 90 l-26 90 l36 40 l-40 110 l30 60 l-24 120" stroke="#3a3430" strokeWidth="7" fill="none" />
+          <path d="M1180 300 l60 30 M1400 220 l-40 50" stroke="#3a3430" strokeWidth="5" fill="none" />
+          <Particles seed={332} count={10} area={[1180, 300, 260, 300]} dist={120} color="#c9c2b0" opacity={0.7} dur={[2, 4]} />
+        </g>
+      )}
+      {beacon && (
+        <g>
+          <rect x="1120" y="150" width="340" height="510" fill="#7f8a92" />
+          {Array.from({ length: 6 }, (_, r) => [0, 1, 2, 3].map((cc) => <rect key={r + "-" + cc} x={1142 + cc * 80} y={180 + r * 72} width="52" height="44" fill="#3a4450" />))}
+          <motion.rect x="1302" y="324" width="52" height="44" fill="#fff2a8" animate={{ opacity: [1, 0.1, 1, 0.1, 1, 1] }} transition={{ duration: 1.6, repeat: Infinity }} />
+          <motion.circle cx="1328" cy="346" r="70" fill="#fff2a8" animate={{ opacity: [0.35, 0, 0.35, 0, 0.35, 0.35] }} transition={{ duration: 1.6, repeat: Infinity }} />
+        </g>
+      )}
+      <rect y="660" width="1600" height="240" fill="#5a5a5c" />
+      <path d="M0 760 H1600" stroke="#e6e2d0" strokeWidth="6" strokeDasharray="70 60" />
+      <rect y="660" width="1600" height="14" fill="#8a8a88" />
+      {pole && (
+        <g transform="translate(250 660)">
+          <rect x="-8" y="-460" width="16" height="460" fill="#6a7278" />
+          {[-430, -380].map((y, i) => <g key={i}><path d={`M8 ${y} l60 -20 v56 l-60 -20 Z`} fill="#c9ced2" /><motion.path d={`M80 ${y - 10} q20 10 0 20 M96 ${y - 20} q30 20 0 40`} stroke="#f4f6f8" strokeWidth="4" fill="none" animate={{ opacity: [0, 1, 0] }} transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.3 }} /></g>)}
+        </g>
+      )}
+      {chaos && (
+        <g>
+          <Car x={620} y={720} c="#c9433a" /><Car x={860} y={735} c="#3a6fa8" flip /><Car x={1440} y={720} c="#d8d4c8" />
+          {[[200, 820, 1, 0], [1000, 850, -1, 0.5], [1300, 830, 1, 1], [500, 860, -1, 0.3]].map(([x, y, dir, d], i) => <Runner key={i} x={x} y={y} s={1.05} dir={dir} delay={d} dist={600} dur={2.2} />)}
+        </g>
+      )}
+      {sign && <EvacSign x={1380} y={640} k={1.15} />}
+      {children}
+      <FloodWater level={water} />
+    </g>
+  );
+}
+// เนินเขาเหนือเมืองที่ถูกน้ำท่วม · shelter = เต็นท์ศูนย์อพยพ
+function SceneHill({ tone = "day", flood = 0.6, shelter = false, crowd = false, officials = false, announce = false, children }) {
+  return (
+    <g>
+      <DSky tone={tone} />
+      {/* เมืองด้านล่างจมน้ำ */}
+      <rect y="470" width="1600" height="140" fill={tone === "night" ? "#1d2c3a" : "#3b6f86"} />
+      {[[80, 30], [230, 50], [400, 24], [560, 60], [760, 36], [940, 54], [1120, 28], [1300, 46], [1470, 34]].map(([x, h], i) => (
+        <g key={i}><rect x={x} y={500 - h * flood} width="90" height={h * flood + 20} fill={tone === "night" ? "#3a4450" : "#8a9298"} /><path d={`M${x - 8} ${500 - h * flood} l53 -30 l53 30 Z`} fill={tone === "night" ? "#4a3a3a" : "#a8584a"} /></g>
+      ))}
+      <motion.rect y="560" width="1600" height="10" fill="#d8eef6" opacity=".4" animate={{ x: [0, -80, 0] }} transition={loopT(6)} />
+      {/* เนินเขา */}
+      <path d="M-50 900 L-50 640 Q300 560 700 600 Q1100 540 1650 620 L1650 900 Z" fill={tone === "night" ? "#22301f" : tone === "dusk" ? "#4e5a33" : "#5f8a45"} />
+      <path d="M-50 900 L-50 720 Q400 660 800 700 Q1200 650 1650 700 L1650 900 Z" fill={tone === "night" ? "#1a2618" : tone === "dusk" ? "#3f4a2a" : "#4f7a38"} />
+      <path d="M700 900 Q760 780 860 720 Q960 660 1100 640" stroke={tone === "night" ? "#4a4030" : "#b39d72"} strokeWidth="60" fill="none" strokeLinecap="round" opacity=".8" />
+      {shelter && [[180, 690, "#2f7fa8"], [420, 670, "#3a8ac0"], [1180, 660, "#2f7fa8"], [1420, 680, "#3a8ac0"]].map(([x, y, c], i) => (
+        <g key={i} transform={`translate(${x} ${y})`}>
+          <path d="M-110 0 L0 -110 L110 0 Z" fill={c} /><path d="M-26 0 L0 -60 L26 0 Z" fill="#163a52" />
+          <line x1="0" y1="-110" x2="0" y2="-140" stroke="#5a5a5c" strokeWidth="5" />
+        </g>
+      ))}
+      {shelter && tone !== "day" && [[360, 560], [1300, 560]].map(([x, y], i) => (
+        <g key={"l" + i}><rect x={x - 4} y={y} width="8" height="140" fill="#3a3a3c" /><motion.circle cx={x} cy={y} r="14" fill="#fff2b8" animate={{ opacity: [0.8, 1, 0.8] }} transition={loopT(2)} /><circle cx={x} cy={y} r="70" fill="#fff2b8" opacity=".15" /></g>
+      ))}
+      {crowd && [[120, 860], [300, 880], [1340, 870], [1500, 850]].map(([x, y], i) => (
+        <g key={"c" + i} transform={`translate(${x} ${y}) scale(.9)`}>
+          <ellipse cx="0" cy="-30" rx="44" ry="34" fill={tone === "night" ? "#1a1c20" : "#3a3f46"} /><circle cx="0" cy="-86" r="26" fill={tone === "night" ? "#1a1c20" : "#3a3f46"} />
+        </g>
+      ))}
+      {officials && <Rescuer x={1240} y={860} s={1.05} flip megaphone={announce} />}
+      {announce && <SirenWash intensity={0.18} dur={1.6} />}
+      {children}
+    </g>
+  );
+}
+// กลุ่มตัวละครในฉากสึนามิ (ภาพชุดลำลอง)
+function DGroup({ charId, playerMood = "idle", mood = "idle", moods = {}, look = null, xs = [420, 580, 740, 900, 1060], y = 840, h = 360, order = SQUAD, enter = null }) {
+  return <g>{order.map((id, i) => <Actor key={id} id={id} x={xs[i]} y={y} h={h} look={enter ? null : look} enter={enter} delay={enter ? i * 0.2 : 0} walkDur={1.5} emotion={id === charId ? playerMood : moods[id] || mood} />)}</g>;
+}
+function SceneDisasterQ({ n, charId, mood = "idle" }) {
+  const G = (p) => <DGroup charId={charId} playerMood={mood} {...p} />;
+  switch (n) {
+    case 1: return <SceneTown chaos tone="storm">{G({ look: "right", mood: "scared", moods: { ek: "worry", bom: "angry" } })}</SceneTown>;
+    case 2: return <SceneTown sign tone="storm">{G({ xs: [260, 420, 580, 740, 900], look: "right", mood: "worry", moods: { waen: "talk", bom: "angry" } })}</SceneTown>;
+    case 3: return <SceneTown chaos tone="storm"><LostChild x={1250} y={850} s={1.1} />{G({ xs: [260, 420, 580, 740, 960], order: ["ek", "waen", "bom", "uan", "fah"], look: "right", mood: "worry", moods: { fah: "sad", ek: "talk" } })}</SceneTown>;
+    case 4: return <SceneTown cracked water={0.08} tone="storm">{G({ xs: [240, 400, 560, 720, 880], look: "right", mood: "worry", moods: { uan: "talk", waen: "scared" } })}</SceneTown>;
+    case 5: return <SceneTown water={0.2} tone="storm">{G({ xs: [360, 560, 780, 1000, 1180], order: ["waen", "ek", "fah", "bom", "uan"], mood: "worry", moods: { ek: "angry", bom: "angry", fah: "talk" } })}</SceneTown>;
+    case 6: return <SceneTown beacon water={0.32} tone="dusk">{G({ xs: [220, 380, 540, 700, 860], look: "right", mood: "worry", moods: { waen: "shock", fah: "sad" } })}</SceneTown>;
+    case 7: return <SceneHill tone="storm" flood={0.7}>{G({ look: "left", mood: "worry", moods: { bom: "angry", uan: "scared" } })}</SceneHill>;
+    case 8: return <SceneHill tone="dusk" flood={0.75}>{G({ xs: [480, 640, 800, 960, 1120], mood: "tired", moods: { uan: "sad", fah: "worry" } })}</SceneHill>;
+    case 9: return <SceneHill tone="dusk" flood={0.8} shelter crowd officials>{G({ xs: [360, 520, 680, 840, 1000], look: "right", mood: "worry", moods: { fah: "sad", ek: "talk" } })}</SceneHill>;
+    case 10: return <SceneHill tone="night" flood={0.85} shelter crowd officials announce>{G({ xs: [360, 520, 680, 840, 1000], look: "right", mood: "scared", moods: { ek: "talk", waen: "worry" } })}</SceneHill>;
+    default: return null;
+  }
+}
+// อินโทร t1–t6
+function SceneDisasterIntro({ n, beat = 0 }) {
+  const G = (p) => <DGroup {...p} />;
+  if (n === "t1") return (
+    <motion.g animate={beat >= 1 ? { x: [0, -10, 9, -7, 5, 0] } : {}} transition={beat >= 1 ? { duration: 0.6, repeat: Infinity, repeatDelay: 0.4 } : {}}>
+      <SceneCoast sea="calm">{G({ xs: [420, 580, 760, 920, 1080], mood: beat >= 1 ? "shock" : "happy", moods: beat >= 1 ? {} : { uan: "smile", waen: "idle", ek: "talk" } })}</SceneCoast>
+    </motion.g>
+  );
+  if (n === "t2") return <SceneTown pole tone="storm">{G({ xs: [520, 680, 840, 1000, 1160], look: "left", mood: beat >= 1 ? "shock" : "worry" })}{beat >= 1 && <SirenWash intensity={0.25} dur={1.4} />}</SceneTown>;
+  if (n === "t3") return <SceneCoast sea="recede">{G({ xs: [360, 520, 700, 880, 1040], order: ["ek", "fah", "waen", "bom", "uan"], mood: beat >= 1 ? "shock" : "worry", moods: { waen: beat >= 1 ? "yell" : "shock" } })}</SceneCoast>;
+  if (n === "t4") return <SceneCoast sea="wave" wave={beat >= 1 ? 0.75 : 0.3} tone="storm" crowd={beat >= 2}>{beat >= 2 && <Particles seed={341} count={18} area={[0, 600, 1600, 300]} dist={120} color="#e9f6fb" opacity={0.5} />}</SceneCoast>;
+  if (n === "t5") return <SceneTown chaos tone="storm">{beat >= 1
+    ? <g><Actor id="bom" x={1300} y={850} h={360} enter="left" walkDur={1.2} emotion="angry" />{G({ xs: [360, 540, 720, 900, 1080], order: ["ek", "waen", "fah", "uan"], mood: "scared", moods: { uan: "worry", ek: "yell" } })}</g>
+    : G({ xs: [360, 540, 720, 900, 1080], mood: "scared", moods: { ek: "yell" } })}</SceneTown>;
+  if (n === "t6") return <SceneTown chaos tone="storm" water={beat >= 1 ? 0.05 : 0}><LostChild x={1220} y={850} s={1.15} />{G({ xs: [280, 440, 600, 760, 960], order: ["ek", "waen", "bom", "uan", "fah"], look: "right", mood: beat >= 2 ? "scared" : "worry", moods: { fah: "sad" } })}</SceneTown>;
+  return null;
+}
+// ฉากคั่น tx0–tx8: beat 0 = สถานที่ · beat 1 = ทั้งห้าคนเดินเข้าฉาก · beat 2+ = เหตุการณ์
+function SceneDisasterInterlude({ k, beat = 0 }) {
+  const walk = beat === 1 ? "left" : null;
+  const G = (p) => (beat >= 1 ? <DGroup enter={walk} {...p} /> : null);
+  switch (k) {
+    case 0: return <SceneTown chaos tone="storm" sign={beat >= 2}>{G({ mood: "scared" })}</SceneTown>;
+    case 1: return <SceneTown chaos tone="storm">{beat >= 2 && <LostChild x={1300} y={850} s={1.1} />}{G({ xs: [260, 420, 580, 740, 900], mood: "worry", moods: beat >= 2 ? { fah: "sad" } : {} })}</SceneTown>;
+    case 2: return <SceneTown cracked={beat >= 2} water={beat >= 1 ? 0.06 : 0} tone="storm">{G({ xs: [240, 400, 560, 720, 880], mood: "scared" })}</SceneTown>;
+    case 3: return <SceneTown water={0.16} tone="storm">{G({ xs: [360, 520, 700, 880, 1060], mood: beat >= 2 ? "angry" : "worry", moods: beat >= 2 ? { fah: "worry", waen: "worry", uan: "worry" } : {} })}</SceneTown>;
+    case 4: return <SceneTown water={0.3} tone="dusk" beacon={beat >= 2}>{G({ xs: [220, 380, 540, 700, 860], mood: "worry", moods: beat >= 2 ? { waen: "shock" } : {} })}</SceneTown>;
+    case 5: return <SceneHill tone="storm" flood={0.65}>{G({ mood: "worry", moods: { bom: "angry" } })}</SceneHill>;
+    case 6: return <SceneHill tone="dusk" flood={0.75}>{G({ xs: [480, 640, 800, 960, 1120], mood: "tired", moods: beat >= 2 ? { uan: "sad" } : {} })}</SceneHill>;
+    case 7: return <SceneHill tone="dusk" flood={0.8} shelter crowd officials={beat >= 2}>{G({ xs: [360, 520, 680, 840, 1000], mood: "idle", moods: { fah: "worry" } })}</SceneHill>;
+    case 8: return <SceneHill tone="night" flood={0.85} shelter crowd officials announce={beat >= 1}>{G({ xs: [360, 520, 680, 840, 1000], mood: beat >= 2 ? "scared" : "tired" })}</SceneHill>;
+    default: return null;
+  }
+}
+// ฉากจบ: รุ่งเช้าบนเนิน มองลงไปที่เมือง · outcome 0 = ดี · 1 = บาดเจ็บ · 2 = หวุดหวิด
+function SceneDisasterEnding({ outcome = 0 }) {
+  const mood = ["happy", "tired", "sad"][outcome] || "tired";
+  return <SceneHill tone="dawn" flood={0.55} shelter crowd><DGroup xs={[420, 580, 740, 900, 1060]} mood={mood} moods={outcome === 0 ? { uan: "smile", fah: "smile" } : {}} /><LostChild x={1220} y={850} s={0.95} crying={false} /></SceneHill>;
+}
+function DisasterCardArt() {
+  return (
+    <svg viewBox="0 0 1600 900" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <rect width="1600" height="900" fill="#1b2a36" />
+      <circle cx="380" cy="220" r="80" fill="#f2c27a" opacity=".45" />
+      <path d="M0 560 L0 300 Q300 200 640 280 Q980 150 1300 260 Q1480 230 1600 280 L1600 560 Z" fill="#1d4f6a" />
+      <motion.path d="M0 300 Q300 200 640 280 Q980 150 1300 260 Q1480 230 1600 280" stroke="#e9f6fb" strokeWidth="22" fill="none" strokeLinecap="round" animate={{ opacity: [0.6, 1, 0.6] }} transition={loopT(1.6)} />
+      <path d="M0 900 V600 H140 V520 H300 V620 H420 V480 H600 V640 H760 V560 H960 V620 H1100 V500 H1280 V600 H1420 V540 H1600 V900 Z" fill="#0e161e" />
+      {[[180, 560], [470, 520], [1150, 540], [1320, 620]].map(([x, y], i) => <rect key={i} x={x} y={y} width="26" height="26" fill={i === 1 ? "#f2a33a" : "#2a3a46"} />)}
+      <rect y="780" width="1600" height="120" fill="#2f5f78" opacity=".75" />
+    </svg>
+  );
+}
+
 function SceneForestQ({ n, charId, mood = "idle" }) {
   const G = (p) => <FQGroup charId={charId} playerMood={mood} {...p} />;
   switch (n) {
@@ -7879,6 +8844,12 @@ function itemEndingLine(result, char) {
 }
 function endingLines(outcome, char, result) {
   const itemLine = result ? itemEndingLine(result, char) : null;
+  if (isDisaster()) return [   // สึนามิ: รุ่งเช้าบนเนิน
+    { at: 600, text: "รุ่งเช้า ทั้งห้าคนยืนมองลงไปจากเนินเขา น้ำเริ่มลดลงจากเมืองชายฝั่ง", sfx: "wind" },
+    { at: 3300, text: ["ทุกคนปลอดภัย รวมถึงเด็กที่พวกเขาช่วยไว้ ซึ่งได้กลับไปหาครอบครัวแล้ว", "ทุกคนรอดมาได้ แม้จะมีบาดแผลและเหนื่อยล้าเต็มที", "กว่าจะมาถึงที่ปลอดภัย ทุกคนแทบไม่เหลือแรง… คุณรอดมาอย่างหวุดหวิด"][outcome] },
+    { at: 6000, text: itemLine || "เมืองด้านล่างยังจมอยู่ใต้น้ำ แต่ความช่วยเหลือกำลังมาถึง" },
+    { at: 8600, text: "ทุกการตัดสินใจเมื่อวานนี้… บอกอะไรบางอย่างเกี่ยวกับตัวคุณ", sfx: "chill" },
+  ];
   if (isForest()) return [   // หลงป่า: ผลลัพธ์ตาม Health เหมือนซอมบี้
     { at: 600, text: "แสงแดดยามเช้าส่องลอดยอดไม้ ถนนลูกรังปรากฏอยู่ตรงหน้า", sfx: "birds" },
     { at: 3300, text: ["ทั้งห้าคนเดินออกจากป่าพร้อมกัน ทุกคนยังแข็งแรงดี", "ทุกคนออกจากป่าได้ แม้จะมีบาดแผลและเหนื่อยล้าเต็มที", "กว่าจะพยุงกันออกมาถึงถนนได้ ทุกคนแทบไม่เหลือแรง… คุณรอดมาอย่างหวุดหวิด"][outcome] },
@@ -8095,7 +9066,7 @@ const ZOMBIE_INTERLUDES = {
     { at: 6690, sfx: "heartbeat", sub: "อีกแค่ไม่กี่ก้าว… แต่แล้วก็มีเสียงร้องดังขึ้นจากข้างหลัง" },
   ], end: 11100 },
 };
-const interludesFor = () => (isForest() ? FOREST_INTERLUDES : ZOMBIE_INTERLUDES);
+const interludesFor = () => (isForest() ? FOREST_INTERLUDES : isDisaster() ? DISASTER_INTERLUDES : ZOMBIE_INTERLUDES);
 
 /* ---------- ภาพฉากคั่น (ซอมบี้): สถานที่ถัดไป + ทั้งห้าคนเดินเข้าฉาก ---------- */
 const ZX_MOOD = { 0: ["worry", "scared"], 1: ["worry", "scared"], 2: ["worry", "worry"], 3: ["worry", "angry"], 4: ["worry", "worry"], 5: ["worry", "shock"], 6: ["worry", "tired"], 7: ["worry", "shock"], 8: ["worry", "shock"] };
@@ -8179,15 +9150,16 @@ function RadarBlip({ size = 40 }) {
 const TOUR_KEY = "zs_tour_done_v1";
 const tourSeen = () => { try { return localStorage.getItem(TOUR_KEY) === "1"; } catch (e) { return false; } };
 const tourMark = () => { try { localStorage.setItem(TOUR_KEY, "1"); } catch (e) {} };
-function tourSteps(forest) {
+function tourSteps(scen) {
+  const forest = scen === "forest", disaster = scen === "disaster";
   return [
     { id: null, icon: "compass", title: "ยินดีต้อนรับสู่ภารกิจเอาตัวรอด!", body: "ก่อนเริ่ม มาดูวิธีเล่นสั้น ๆ กันก่อน ใช้เวลาไม่ถึง 1 นาที" },
     { id: "scene-box", icon: "film", title: "ภาพสถานการณ์", body: "ดูว่าทีมอยู่ที่ไหนและกำลังเจออะไร ภาพจะเปลี่ยนไปตามเรื่องราวในแต่ละข้อ" },
     { id: "dialogue-box", icon: "message-square-text", title: "เรื่องราวและคำถาม", body: "คำถามจะขึ้นตรงนี้พร้อมเสียงอ่าน แตะกล่องนี้ถ้าอยากให้ข้อความขึ้นครบทันที" },
     { id: "options-grid", icon: "list-checks", title: "เลือกสิ่งที่ \"คุณ\" จะทำจริง ๆ", body: "แตะตัวเลือกที่ใช่ แล้วกดยืนยัน เปลี่ยนใจได้ก่อนยืนยัน ไม่มีคำตอบถูกหรือผิด ตอบตามที่เป็นตัวเองที่สุด" },
-    { id: "squad-panel", icon: "activity", title: "สภาพของทีม", body: "Health (การดูแลตัวเอง) · " + (forest ? "Danger" : "Infection") + " (การกล้าเสี่ยง) · Panic (ความเครียด) เปลี่ยนตามการตัดสินใจของคุณ ถ้าค่าข้ามเกณฑ์จะเกิดสถานะ เช่น บาดเจ็บ หรือตื่นตระหนก ซึ่งมีผลต่อเกมและตอนจบ" },
+    { id: "squad-panel", icon: "activity", title: "สภาพของทีม", body: "Health (การดูแลตัวเอง) · " + (forest || disaster ? "Danger" : "Infection") + " (การกล้าเสี่ยง) · Panic (ความเครียด) เปลี่ยนตามการตัดสินใจของคุณ ถ้าค่าข้ามเกณฑ์จะเกิดสถานะ เช่น บาดเจ็บ หรือตื่นตระหนก ซึ่งมีผลต่อเกมและตอนจบ" },
     { id: "belt-panel", icon: "backpack", title: "ไอเทมในเป้", body: "แตะไอเทมเพื่อใช้คู่กับคำตอบข้อนั้น หรือมอบให้เพื่อนที่กำลังต้องการความช่วยเหลือ ระหว่างทางจะเก็บไอเทมเพิ่มได้" },
-    { id: null, icon: forest ? "trees" : "siren", title: "พร้อมแล้ว ไปกันเลย!", body: (forest ? "ป่าแห่งนี้รับรู้ได้ว่าคุณลังเลหรือมั่นใจ " : "บางฉากจะมีซอมบี้จู่โจม ต้องตอบสนองภายในเวลา และถ้าลังเลนาน ซอมบี้จะค่อย ๆ เข้ามาใกล้ ") + "ระหว่างทางมีการสแกนความจำ และถ้าคิดไม่ออกจะมีคำใบ้ขึ้นมาช่วย" },
+    { id: null, icon: forest ? "trees" : disaster ? "waves" : "siren", title: "พร้อมแล้ว ไปกันเลย!", body: (forest ? "ป่าแห่งนี้รับรู้ได้ว่าคุณลังเลหรือมั่นใจ " : disaster ? "บางฉากจะมีวิกฤตให้เลือกของในเป้ และถ้าลังเลนาน น้ำจะค่อย ๆ ขึ้นมาใกล้ " : "บางฉากจะมีซอมบี้จู่โจม ต้องตอบสนองภายในเวลา และถ้าลังเลนาน ซอมบี้จะค่อย ๆ เข้ามาใกล้ ") + "ระหว่างทางมีการสแกนความจำ และถ้าคิดไม่ออกจะมีคำใบ้ขึ้นมาช่วย" },
   ];
 }
 function TourOverlay({ step, steps, onNext, onPrev, onSkip, wide }) {
@@ -8287,17 +9259,21 @@ function ForestMoodLayer({ hes = 0, panic = 0, burst = 0, wide = true }) {
    ลังเลนาน/สลับคำตอบบ่อย → ข้อความเตือนว่าซอมบี้ใกล้เข้ามา ภาพแดงมืดลง เสียงคำรามถี่ขึ้น (ไม่แสดงตัวซอมบี้)
    ตอบเร็วอย่างมั่นใจ → แฟลชสั้น ๆ */
 const ZOMBIE_TAUNTS = ["…แกรรร…", "ได้ยินเสียงลากเท้า…", "มันได้กลิ่นคุณแล้ว…", "ช้าไปแล้ว!", "มันอยู่ข้างหลังคุณ!", "เลือกเดี๋ยวนี้!"];
-function ZombieMoodLayer({ hes = 0, panic = 0, burst = 0, wide = true }) {
+const WATER_TAUNTS = ["…ซู่…", "ได้ยินเสียงคลื่น…", "น้ำกำลังขึ้น…", "ช้าไปแล้ว!", "น้ำมาถึงเท้าแล้ว!", "เลือกเดี๋ยวนี้!"];
+function ZombieMoodLayer({ hes = 0, panic = 0, burst = 0, wide = true, kind = "zombie" }) {
+  const water = kind === "disaster";   // สึนามิ: ข้อความเรื่องน้ำ + ขอบจอสีน้ำเงินเข้ม
   const p = Math.max(0, (panic - 55) / 45);
   const red = hes * 0.5 + p * 0.2, dark = 0.05 + hes * 0.35 + p * 0.2;
   const bpm = 60 + Math.round(panic * 0.7 + hes * 30);
-  const words = hes > 0.4 ? ZOMBIE_TAUNTS.slice(0, 1 + Math.floor((hes - 0.4) * 9)) : [];
+  const words = hes > 0.4 ? (water ? WATER_TAUNTS : ZOMBIE_TAUNTS).slice(0, 1 + Math.floor((hes - 0.4) * 9)) : [];
   const pos = [[16, 20], [60, 14], [38, 34], [72, 40], [10, 48], [52, 56]];
-  const label = hes >= 0.75 ? "ซอมบี้ประชิดตัวแล้ว!" : hes >= 0.4 ? "ซอมบี้กำลังเข้ามาใกล้…" : hes >= 0.2 ? "ได้ยินเสียงอะไรบางอย่าง…" : panic >= 60 ? "หัวใจเต้นแรง…" : null;
+  const label = water ? (hes >= 0.75 ? "น้ำมาถึงตัวแล้ว!" : hes >= 0.4 ? "น้ำกำลังขึ้นมาใกล้…" : hes >= 0.2 ? "ได้ยินเสียงคลื่น…" : panic >= 60 ? "หัวใจเต้นแรง…" : null)
+    : hes >= 0.75 ? "ซอมบี้ประชิดตัวแล้ว!" : hes >= 0.4 ? "ซอมบี้กำลังเข้ามาใกล้…" : hes >= 0.2 ? "ได้ยินเสียงอะไรบางอย่าง…" : panic >= 60 ? "หัวใจเต้นแรง…" : null;
   return (
     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 5 }}>
-      <div className="absolute inset-0" style={{ background: "radial-gradient(80% 75% at 50% 50%, transparent 40%, rgba(120,8,8,1) 100%)", opacity: red, transition: "opacity 1.2s ease" }} />
+      <div className="absolute inset-0" style={{ background: water ? "radial-gradient(80% 75% at 50% 50%, transparent 40%, rgba(10,50,80,1) 100%)" : "radial-gradient(80% 75% at 50% 50%, transparent 40%, rgba(120,8,8,1) 100%)", opacity: red, transition: "opacity 1.2s ease" }} />
       <div className="absolute inset-0" style={{ background: "radial-gradient(75% 70% at 50% 50%, transparent 35%, rgba(4,2,2,1) 100%)", opacity: dark, transition: "opacity 1.2s ease" }} />
+      {water && <div className="absolute left-0 right-0 bottom-0" style={{ height: Math.round(hes * 26) + "%", background: "linear-gradient(to top, rgba(40,100,130,.75), rgba(60,130,160,.35))", borderTop: hes > 0.05 ? "2px solid rgba(220,240,248,.6)" : "none", transition: "height 1.2s ease" }} />}
       {panic >= 60 || hes >= 0.6 ? (
         <motion.div className="absolute inset-0" style={{ boxShadow: "inset 0 0 90px rgba(170,20,20,.9)" }}
           animate={{ opacity: [0, 0.2 + Math.max(p, hes) * 0.4, 0, 0.1 + Math.max(p, hes) * 0.25, 0] }} transition={{ duration: 60 / bpm, repeat: Infinity, ease: "easeOut" }} />
@@ -8350,7 +9326,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const editor = useIsEditor();                       // เจ้าของ/ผู้แก้ไข: ข้ามข้อ · กระโดดไปข้อ/ฉากคั่นใดก็ได้
   const [tour, setTour] = useState(() => (tourSeen() ? null : 0)); // ระบบนำร่องเล่นครั้งแรก
   const tourRef = useRef(tour); tourRef.current = tour;
-  const tourSteps_ = useMemo(() => tourSteps(isForest()), []);
+  const tourSteps_ = useMemo(() => tourSteps(ACTIVE_SCENARIO), []);
   const [pendingIl, setPendingIl] = useState(null);           // เอฟเฟกต์โดนดาเมจ (สั่นจอ + ขอบแดง)
   const shakeCtl = useAnimationControls();
   useEffect(() => { if (hitKey) shakeCtl.start({ x: [0, -14, 12, -9, 7, -4, 0], y: [0, 6, -5, 4, -2, 0], transition: { duration: 0.5 } }); }, [hitKey]);
@@ -8371,7 +9347,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const loc = locTable()[q.n];
   const bgUrl = MEDIA_ASSETS.backgrounds[loc.key];
   // หลงป่า: ใช้ข้อความคำถามจากไฟล์ตรง ๆ (รวมประโยคถามท้ายข้อ) ไม่เติมคำเอง
-  const narration = isForest() ? q.title + " — " + q.note : q.title + (q.note ? " — " + q.note : "") + " · คุณจะทำอย่างไร?";
+  const narration = ACTIVE_SCENARIO !== "zombie" ? q.title + " — " + q.note : q.title + (q.note ? " — " + q.note : "") + " · คุณจะทำอย่างไร?";
   const ally = allyFor(charId, q.n);
 
   const typeOut = (full, my) => new Promise((res) => {
@@ -8392,7 +9368,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     if (tourRef.current !== null) return; // รอให้ดูวิธีเล่นจบก่อน ค่อยเริ่มอ่านคำถาม
     if (handled.current.has(qi)) return;
     handled.current.add(qi);
-    if (!isForest() && QTE_AT[q.n] && !tele.current.qte.some((e) => e.qi === qi)) { startQte(); return; }
+    if (ACTIVE_SCENARIO === "zombie" && QTE_AT[q.n] && !tele.current.qte.some((e) => e.qi === qi)) { startQte(); return; }
     if (hazardFor(q.n) && !tele.current.hazards.some((e) => e.qi === qi)) { startHazard(); return; }
     startNarrate();
   };
@@ -8584,7 +9560,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   useEffect(() => {
     if (!pickable) return;
     let alive = true; const ts = [];
-    const fx = isForest() ? "whisper" : "zgrowl";   // หลงป่า = เสียงกระซิบ · ซอมบี้ = เสียงคำราม
+    const fx = isForest() ? "whisper" : isDisaster() ? "surf" : "zgrowl";   // หลงป่า = เสียงกระซิบ · ซอมบี้ = เสียงคำราม
     const whisperLoop = () => { if (!alive) return; const h = atmo.current.hes; if (h > 0.45) AUDIO.play(fx); ts.push(setTimeout(whisperLoop, h > 0.45 ? 5200 - h * 2600 : 1000)); };
     const heartLoop = () => { if (!alive) return; const pn = atmo.current.panic, h = atmo.current.hes; const on = pn >= 60 || h >= 0.6; if (on) AUDIO.play("heartbeat"); ts.push(setTimeout(heartLoop, on ? Math.max(520, 1150 - (pn - 50) * 9 - h * 250) : 800)); };
     ts.push(setTimeout(whisperLoop, 1000)); ts.push(setTimeout(heartLoop, 800));
@@ -8706,7 +9682,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
       notes.push({ kind: "gain", name: ITEM_DB[id].name, icon: ITEM_DB[id].icon }); events.push({ type: "gain", id });
     });
     // สถานะ "เชื้อลุกลาม/ตกอยู่ในอันตราย": Health ลดทุกข้อ
-    if (meters.infection >= 70) { const d = { health: -INF_DRAIN }; fx = fxAdd(fx, d); notes.push({ kind: "status", name: (isForest() ? "ตกอยู่ในอันตราย" : "เชื้อลุกลาม") + " Health −" + INF_DRAIN, icon: infIcon() }); }
+    if (meters.infection >= 70) { const d = { health: -INF_DRAIN }; fx = fxAdd(fx, d); notes.push({ kind: "status", name: (ACTIVE_SCENARIO !== "zombie" ? "ตกอยู่ในอันตราย" : "เชื้อลุกลาม") + " Health −" + INF_DRAIN, icon: infIcon() }); }
     tele.current.items = [...tele.current.items.filter((e) => e.qi !== qi), ...events.map((e) => ({ ...e, qi, n: q.n }))];
     setInventory(inv);
     setItemNote(notes.length ? notes : null);
@@ -9039,7 +10015,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
             </AnimatePresence>
             {phase !== "interlude" && (isForest()
               ? <ForestMoodLayer hes={hes} panic={meters.panic} burst={burst} wide={wide} />
-              : <ZombieMoodLayer hes={hes} panic={meters.panic} burst={burst} wide={wide} />)}
+              : <ZombieMoodLayer hes={hes} panic={meters.panic} burst={burst} wide={wide} kind={ACTIVE_SCENARIO} />)}
             <div className="absolute inset-0 vignette pointer-events-none" />
             {qte && (
               <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
@@ -9694,7 +10670,7 @@ function buildAIPayload({ result, char, type, tm }) {
   const st = tm.items && STRATEGY_INFO[tm.items.strategy];
   const m = result.meters || {};
   return {
-    scenario: isForest() ? "หลงป่า · ป่าต้องห้าม" : "มหาวิทยาลัยซอมบี้",
+    scenario: isForest() ? "หลงป่า · ป่าต้องห้าม" : isDisaster() ? "สึนามิ · วันที่ทะเลกลืนกินเมือง" : "มหาวิทยาลัยซอมบี้",
     character_role: char.role,
     mbti: type,
     mbti_percent: { E: pct("E", "I"), S: pct("S", "N"), T: pct("T", "F"), J: pct("J", "P") },
@@ -10070,7 +11046,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
     let date = ""; try { date = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }); } catch (e) {}
     const st = tm.items && STRATEGY_INFO[tm.items.strategy];
     return {
-      forest: isForest(), scenario: isForest() ? "หลงป่า · ป่าต้องห้าม" : "มหาวิทยาลัยซอมบี้", date,
+      forest: isForest(), scenario: isForest() ? "หลงป่า · ป่าต้องห้าม" : isDisaster() ? "สึนามิ · วันที่ทะเลกลืนกินเมือง" : "มหาวิทยาลัยซอมบี้", date,
       code: result.code || verifyCode(result.sid, type, sc, ef),
       sprite: (spriteOf(charId) || {}).front || PORTRAIT_DATA[charId], color: char.color, charName: char.name, charRole: char.role,
       type, typeName: TYPE_NAMES[type] || "", typeDesc: TYPE_DESC[type] || "", dims, stamp, rank: grade + "-Rank " + temper,
@@ -10312,7 +11288,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
               )) : <p className="text-sm" style={{ color: "var(--dim)" }}>ผลของคุณกระจายหลายขั้ว ลองเล่นอีกครั้งด้วยตัวละครอื่น</p>}
             </motion.section>
             <motion.section variants={rise} className="border p-5 flex flex-col gap-3 min-w-0" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
-              <span className="lbl">{isForest() ? "สภาพทีมเมื่อออกจากป่า" : "สภาพทีมเมื่อขึ้นรถทหาร"}</span>
+              <span className="lbl">{isForest() ? "สภาพทีมเมื่อออกจากป่า" : isDisaster() ? "สภาพทีมเมื่อถึงที่ปลอดภัย" : "สภาพทีมเมื่อขึ้นรถทหาร"}</span>
               <Meter label="Health" icon="heart-pulse" value={result.meters.health} color="var(--green)" />
               <Meter label={infLabel()} icon={infIcon()} value={result.meters.infection} color="var(--red)" />
               <Meter label="Panic" icon="brain" value={result.meters.panic} color="var(--amber)" />
@@ -10418,7 +11394,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
 
 
 
-          {!isForest() && (<Section icon="siren" eyebrow={"Stress Reflex Score · QTE " + QTE_MS / 1000 + " วินาที"} title="การตั้งสติเมื่อถูกจู่โจมกะทันหัน"
+          {ACTIVE_SCENARIO === "zombie" && (<Section icon="siren" eyebrow={"Stress Reflex Score · QTE " + QTE_MS / 1000 + " วินาที"} title="การตั้งสติเมื่อถูกจู่โจมกะทันหัน"
             lead={tm.stressReflex === null ? "ไม่มีข้อมูล QTE ในรอบนี้" : "คะแนน " + tm.stressReflex + "/100 · " + tm.qteLabel + " คำนวณจากเวลาตอบสนอง (ยิ่งเร็วยิ่งดี) และคุณภาพของการตอบโต้ (ใช้ไอเทม/จุดแข็ง > ถอยหลบ > ตัวแข็งไม่ตอบ)"}>
             <div className="flex flex-col gap-3">
               {tm.qte.map((e) => (
@@ -10460,7 +11436,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
                 {(() => {
                   const hzl = (result.telemetry && result.telemetry.hazards) || [];
                   if (!hzl.length) return null;
-                  const scen = isForest() ? "forest" : "zombie";
+                  const scen = ACTIVE_SCENARIO;
                   return (
                     <div className="flex flex-col gap-2">
                       <Sub icon="siren">วิกฤตไอเทม · คุณแก้สถานการณ์ฉุกเฉินอย่างไร</Sub>
@@ -10670,7 +11646,8 @@ function App() {
               {screen === "title" && <TitleScreen onStart={start} onData={() => setScreen("data")} />}
               {screen === "profile" && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("home")} initial={profile} />}
               {screen === "data" && <DataScreen onBack={() => setScreen("home")} />}
-              {screen === "intro" && scenario !== "forest" && <IntroScreen onDone={() => setScreen("game")} onBack={() => setScreen("select")} />}
+              {screen === "intro" && scenario === "disaster" && <IntroScreen intro={INTRO_DISASTER} narration={null} onDone={() => setScreen("game")} onBack={() => setScreen("select")} />}
+              {screen === "intro" && scenario === "zombie" && <IntroScreen onDone={() => setScreen("game")} onBack={() => setScreen("select")} />}
               {screen === "intro" && scenario === "forest" && <IntroScreen intro={INTRO_FOREST} narration={null} startLabel={FOREST_QUESTIONS_READY ? "เริ่มทำแบบทดสอบ ข้อ 1" : "ไปต่อ (คำถามกำลังมา)"}
                 onDone={() => setScreen(FOREST_QUESTIONS_READY ? "game" : "soon")} onBack={() => setScreen("select")} />}
               {screen === "soon" && (
