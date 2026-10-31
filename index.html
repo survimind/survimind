@@ -7272,13 +7272,27 @@ const isDisaster = () => ACTIVE_SCENARIO === "disaster";
 // ช่วงที่ตัวละครพูดในเสียงอ่านคำถาม (วินาทีในไฟล์ dqN) → ซูมภาพไปที่ตัวละครนั้นตัวเดียว
 const DQ_SPEAKERS = {"2": [{"s": 7.34, "e": 10.77, "who": "waen"}, {"s": 10.87, "e": 12.98, "who": "bom"}], "3": [{"s": 4.53, "e": 6.27, "who": "fah"}, {"s": 6.37, "e": 8.97, "who": "ek"}]};
 const SPEAKER_NAME = { ek: "เอก", waen: "แว่น", fah: "ฟ้า", bom: "บอม", uan: "อ้วน" };
-function SpeakerCloseUp({ id, wide = true }) {
+const SPEAKER_ID = { "เอก": "ek", "แว่น": "waen", "ฟ้า": "fah", "บอม": "bom", "อ้วน": "uan" };
+// แยกบทพูดของตัวละครออกจากโจทย์: ข้อความบรรยายอยู่ในกล่องคำถาม · บทพูดไปขึ้นเป็นกล่องข้อความในฉาก
+const splitNote = (note) => {
+  const lines = [];
+  const text = (note || "").replace(/(เอก|แว่น|ฟ้า|บอม|อ้วน): “([^”]+)”\s*/g, (m, name, said) => { lines.push({ who: SPEAKER_ID[name], text: said }); return ""; }).replace(/\s+/g, " ").trim();
+  return { text, lines };
+};
+function SpeakerCloseUp({ id, text = "", wide = true }) {
   return (
     <motion.div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
       <div className="absolute inset-0" style={{ background: "rgba(8,10,12,.5)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} />
       <motion.svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" initial={{ scale: 0.92, y: 20 }} animate={{ scale: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
-        <Actor id={id} x={800} y={1600} h={1580} emotion="talk" />
+        <Actor id={id} x={text ? 1080 : 800} y={1600} h={1580} emotion="talk" />
       </motion.svg>
+      {text && (
+        <motion.div className="absolute left-[4%] top-[12%] w-[52%] text-center px-3 py-2 sm:px-5 sm:py-4" initial={{ opacity: 0, y: -8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.25, delay: 0.1 }}
+          style={{ background: "#fffbe8", color: "#1c1c1c", border: "3px solid #1c1c1c", borderRadius: 18, boxShadow: "0 6px 18px rgba(0,0,0,.45)" }}>
+          <span className="f-display font-bold leading-snug" style={{ fontSize: wide ? 24 : 14 }}>“{text}”</span>
+          <span className="absolute top-1/2 -right-[16px] w-0 h-0" style={{ borderTop: "12px solid transparent", borderBottom: "12px solid transparent", borderLeft: "16px solid #1c1c1c", transform: "translateY(-50%)" }} />
+        </motion.div>
+      )}
       <span className="absolute right-3 bottom-3 f-display font-bold px-3 py-1" style={{ fontSize: wide ? 22 : 14, background: "rgba(8,10,12,.75)", color: "var(--amber)", borderRight: "3px solid var(--amber)" }}>{SPEAKER_NAME[id] || id}</span>
     </motion.div>
   );
@@ -9613,7 +9627,8 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const loc = locTable()[q.n];
   const bgUrl = MEDIA_ASSETS.backgrounds[loc.key];
   // หลงป่า: ใช้ข้อความคำถามจากไฟล์ตรง ๆ (รวมประโยคถามท้ายข้อ) ไม่เติมคำเอง
-  const narration = ACTIVE_SCENARIO !== "zombie" ? q.title + " — " + q.note : q.title + (q.note ? " — " + q.note : "") + " · คุณจะทำอย่างไร?";
+  const qSplit = isDisaster() ? splitNote(q.note) : null;
+  const narration = qSplit ? q.title + " — " + qSplit.text : ACTIVE_SCENARIO !== "zombie" ? q.title + " — " + q.note : q.title + (q.note ? " — " + q.note : "") + " · คุณจะทำอย่างไร?";
   const ally = allyFor(charId, q.n);
 
   const typeOut = (full, my) => new Promise((res) => {
@@ -9749,9 +9764,18 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     setPhase("narrate");
     later(async () => {
       // สึนามิ: ตัวละครที่พูดในคำถามจะถูกซูมขึ้นมาตามจังหวะเสียง
-      const spk = isDisaster() ? DQ_SPEAKERS[q.n] : null;
-      const onStart = spk ? () => spk.forEach((sg) => { later(() => { if (token.current === my) setSpeaker(sg.who); }, sg.s * 1000); later(() => { if (token.current === my) setSpeaker((w) => (w === sg.who ? null : w)); }, sg.e * 1000); }) : null;
+      const lines = qSplit ? qSplit.lines : [];
+      const spk = isDisaster() && voiceUrl(charId, q.n, "question") ? DQ_SPEAKERS[q.n] : null;
+      // มีเสียงพากย์: ซูม + กล่องข้อความตามเวลาในไฟล์ · ไม่มีเสียง: แสดงทีละคนหลังพิมพ์บรรยายจบ
+      const onStart = spk ? () => spk.forEach((sg, k) => { const ln = lines[k] || { who: sg.who, text: "" }; later(() => { if (token.current === my) setSpeaker(ln); }, sg.s * 1000); later(() => { if (token.current === my) setSpeaker((w) => (w === ln ? null : w)); }, sg.e * 1000); }) : null;
       await Promise.all([typeOut(narration, my), playVoice(voiceUrl(charId, q.n, "question"), 2000, voice.current, onStart)]);
+      if (!spk && lines.length) {
+        for (const ln of lines) {
+          if (token.current !== my) return;
+          setSpeaker(ln); AUDIO.play("type");
+          await new Promise((r) => later(r, Math.max(2200, ln.text.length * 85)));
+        }
+      }
       setSpeaker(null);
       if (token.current !== my) return;
       setPhase("options");
@@ -10285,7 +10309,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
                 </motion.div>
               )}
             </AnimatePresence>
-            <AnimatePresence>{speaker && phase === "narrate" && <SpeakerCloseUp key={speaker} id={speaker} wide={wide} />}</AnimatePresence>
+            <AnimatePresence>{speaker && phase === "narrate" && <SpeakerCloseUp key={speaker.who + speaker.text} id={speaker.who} text={speaker.text} wide={wide} />}</AnimatePresence>
             {phase !== "interlude" && (isForest()
               ? <ForestMoodLayer hes={hes} panic={meters.panic} burst={burst} wide={wide} />
               : <ZombieMoodLayer hes={hes} panic={meters.panic} burst={burst} wide={wide} kind={ACTIVE_SCENARIO} />)}
