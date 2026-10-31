@@ -7808,7 +7808,7 @@ const INTRO_DISASTER = [
             { at: 4200, beat: 1, sfx: "steps", label: "ออกวิ่ง", sub: "บอมออกวิ่งนำไปก่อนแล้ว ส่วนอ้วนยังกำถุงขนมไว้แน่นโดยไม่รู้ตัว" }] },
   { cam: "กลางถนน", title: "วันที่ทะเลกลืนกินเมือง", desc: "ช่วยคนอื่น หรือรีบเอาตัวรอด?", bg: "linear-gradient(180deg,#5c6f80,#1c262e 80%)", dur: null, art: "t6", quiet: true,
     loop: true, loopSfx: "surf", loopMs: 4600, loopAt: 15000,
-    steps: [{ at: 0, sfx: "chill", label: "ฟ้าหยุด", sub: "แต่ระหว่างทาง ฟ้าหยุดชะงัก เมื่อเห็นเด็กคนหนึ่งยืนร้องไห้อยู่กลางถนน พลัดหลงจากครอบครัว" },
+    steps: [{ at: 0, sfx: "crowd", label: "ผู้คนรอบตัว", sub: "แต่รอบตัวพวกเขา ยังมีผู้คนอีกมากมายที่บาดเจ็บ พลัดหลง และต้องการความช่วยเหลือ" },
             { at: 5200, beat: 1, sfx: "surf", label: "เสียงคลื่น", sub: "เสียงคลื่นดังใกล้เข้ามาทุกวินาที พวกเขามีเวลาเพียงไม่กี่นาทีในการตัดสินใจ" },
             { at: 10000, beat: 2, sfx: "heartbeat", label: "ตัดสินใจ", sub: "จะเลือกช่วยเหลือผู้อื่น หรือรีบหาทางเอาชีวิตรอด? การตัดสินใจครั้งนี้อาจเปลี่ยนชะตาของทุกคนไปตลอดกาล" }] },
 ];
@@ -8177,7 +8177,7 @@ function SceneDisasterIntro({ n, beat = 0 }) {
   if (n === "t5") return <SceneTown chaos tone="storm">{beat >= 1
     ? <g><Actor id="bom" x={1300} y={850} h={360} enter="left" walkDur={1.2} emotion="angry" />{G({ xs: [360, 540, 720, 900, 1080], order: ["ek", "waen", "fah", "uan"], mood: "scared", moods: { uan: "worry", ek: "yell" } })}</g>
     : G({ xs: [360, 540, 720, 900, 1080], mood: "scared", moods: { ek: "yell" } })}</SceneTown>;
-  if (n === "t6") return <SceneTown chaos tone="storm" water={beat >= 1 ? 0.05 : 0}><LostChild x={1220} y={850} s={1.15} />{G({ xs: [280, 440, 600, 760, 960], order: ["ek", "waen", "bom", "uan", "fah"], look: "right", mood: beat >= 2 ? "scared" : "worry", moods: { fah: "sad" } })}</SceneTown>;
+  if (n === "t6") return <SceneTown chaos tone="storm" water={beat >= 1 ? 0.05 : 0}>{G({ xs: [360, 520, 680, 840, 1000], look: "right", mood: beat >= 2 ? "scared" : "worry", moods: { fah: "sad" } })}</SceneTown>;
   return null;
 }
 // ฉากคั่น tx0–tx8: beat 0 = สถานที่ · beat 1 = ทั้งห้าคนเดินเข้าฉาก · beat 2+ = เหตุการณ์
