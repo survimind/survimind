@@ -12,6 +12,13 @@
  *   ALLOWED_ORIGINS  (Text, ไม่บังคับ) ค่าเริ่มต้น https://survimind.github.io
  *   GEMINI_MODELS    (Text, ไม่บังคับ) ชื่อโมเดลคั่นด้วยจุลภาค ลองตามลำดับ
  *                    ค่าเริ่มต้น gemini-3.5-flash-lite,gemini-3.8-flash
+ *   TEACHER_KEY      (Secret, สำหรับห้องอาจารย์) รหัสที่อาจารย์ใช้ดูผลของนักศึกษา
+ *   SESSIONS         (KV namespace binding, สำหรับห้องอาจารย์) ที่เก็บผลการเล่นของนักศึกษา
+ *
+ * ห้องอาจารย์ (mode):
+ *   save  → บันทึก/อัปเดตผลการเล่น 1 รอบ (ไม่ต้องใช้รหัส · รับเฉพาะฟิลด์ที่กำหนด · ไม่รับข้อมูลส่วนตัวอื่น)
+ *   list  → รายการผลทั้งหมดแบบย่อ (ต้องใช้ TEACHER_KEY)
+ *   get   → ผลเต็มของ 1 รอบ (ต้องใช้ TEACHER_KEY)
  */
 
 const DEFAULT_ORIGINS = "https://survimind.github.io";
@@ -62,12 +69,16 @@ export default {
     if (request.method === "GET") return json({ ok: true, service: "survimind-ai" }, 200, cors);
     if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
     if (!okOrigin) return json({ ok: false, error: "forbidden_origin" }, 403, cors);
-    if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
 
     const raw = await request.text();
     if (raw.length > MAX_BODY) return json({ ok: false, error: "too_large" }, 413, cors);
     let body;
     try { body = JSON.parse(raw); } catch { return json({ ok: false, error: "bad_json" }, 400, cors); }
+
+    // ---- ห้องอาจารย์: เก็บและดูผลของนักศึกษา ----
+    if (body && (body.mode === "save" || body.mode === "list" || body.mode === "get")) return teacherApi(body, env, cors);
+
+    if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
     const player = sanitize(body && body.player);
     if (!player) return json({ ok: false, error: "bad_payload" }, 400, cors);
     const models = (env.GEMINI_MODELS || DEFAULT_MODELS).split(",").map((s) => s.trim()).filter(Boolean);
@@ -223,4 +234,75 @@ function parseReport(text) {
       .map((d, i) => ({ day: Number(d.day) || i + 1, action: String(d.action || "").slice(0, 240) })),
     group_work_role: typeof o.group_work_role === "string" ? o.group_work_role.slice(0, 500) : "",
   };
+}
+
+
+// ================= ห้องอาจารย์ =================
+const SESSION_TTL = 60 * 60 * 24 * 365;   // เก็บ 1 ปี แล้วลบอัตโนมัติ
+const tStr = (v, n) => (typeof v === "string" ? v.slice(0, n) : undefined);
+const tNum = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 100) / 100 : undefined);
+function sameKey(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || !b) return false;
+  let d = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return d === 0;
+}
+function cleanSession(s) {
+  if (!s || typeof s !== "object") return null;
+  const sid = tStr(s.sid, 40);
+  if (!sid || !/^[A-Za-z0-9_-]+$/.test(sid)) return null;
+  const out = { sid };
+  const put = (k, v) => { if (v !== undefined && v !== null && v !== "") out[k] = v; };
+  put("scenario", ["zombie", "forest", "disaster"].includes(s.scenario) ? s.scenario : undefined);
+  put("character", ["ek", "waen", "fah", "bom", "uan"].includes(s.character) ? s.character : undefined);
+  put("mbti", /^[EI][SN][TF][JP]$/.test(s.mbti || "") ? s.mbti : undefined);
+  put("gender", tStr(s.gender, 20));
+  put("age", tNum(s.age));
+  put("device", tStr(s.device, 10));
+  put("playerName", tStr(s.playerName, 40));
+  put("code", tStr(s.code, 40));
+  put("startedAt", tNum(s.startedAt));
+  put("finishedAt", tNum(s.finishedAt));
+  // ผลการเล่นเต็ม (คะแนน สภาพทีม พฤติกรรม) สำหรับเปิดหน้าผลลัพธ์ย้อนหลัง
+  if (s.result && typeof s.result === "object") {
+    const r = JSON.stringify(s.result);
+    if (r.length <= 60000) out.result = JSON.parse(r);
+  }
+  return out;
+}
+function metaOf(r) {
+  const tm = (r.result && r.result.summary) || {};
+  return { t: r.finishedAt || r.startedAt || 0, sc: r.scenario, ch: r.character, mb: r.mbti, g: r.gender, a: r.age, n: r.playerName ? r.playerName.slice(0, 30) : undefined,
+    lat: tNum(tm.avgLatency), sw: tNum(tm.totalSwitches), wm: tNum(tm.ef && tm.ef.wm), ic: tNum(tm.ef && tm.ef.ic), cf: tNum(tm.ef && tm.ef.cf),
+    h: tNum(r.result && r.result.meters && r.result.meters.health), p: tNum(r.result && r.result.meters && r.result.meters.panic), done: !!r.finishedAt };
+}
+async function teacherApi(body, env, cors) {
+  if (!env.SESSIONS) return json({ ok: false, error: "kv_missing" }, 503, cors);
+  if (body.mode === "save") {
+    const s = cleanSession(body.session);
+    if (!s) return json({ ok: false, error: "bad_session" }, 400, cors);
+    const key = "s:" + s.sid;
+    let old = {};
+    try { old = (await env.SESSIONS.get(key, "json")) || {}; } catch {}
+    const rec = { ...old, ...s };
+    await env.SESSIONS.put(key, JSON.stringify(rec), { expirationTtl: SESSION_TTL, metadata: metaOf(rec) });
+    return json({ ok: true }, 200, cors);
+  }
+  if (!env.TEACHER_KEY) return json({ ok: false, error: "teacher_key_missing" }, 503, cors);
+  if (!sameKey(String(body.key || ""), env.TEACHER_KEY)) return json({ ok: false, error: "wrong_key" }, 401, cors);
+  if (body.mode === "get") {
+    const sid = tStr(body.sid, 40);
+    if (!sid) return json({ ok: false, error: "bad_sid" }, 400, cors);
+    const rec = await env.SESSIONS.get("s:" + sid, "json");
+    return rec ? json({ ok: true, session: rec }, 200, cors) : json({ ok: false, error: "not_found" }, 404, cors);
+  }
+  const rows = [];
+  let cursor;
+  do {
+    const page = await env.SESSIONS.list({ prefix: "s:", cursor, limit: 1000 });
+    page.keys.forEach((k) => rows.push({ sid: k.name.slice(2), ...(k.metadata || {}) }));
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor && rows.length < 5000);
+  rows.sort((a, b) => (b.t || 0) - (a.t || 0));
+  return json({ ok: true, sessions: rows }, 200, cors);
 }

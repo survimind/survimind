@@ -4043,7 +4043,14 @@ const STORE = (() => {
   };
   let queue = Promise.resolve();
   // บันทึก/อัปเดต session ของผู้เล่นคนนี้ (ทีละครั้ง กันเขียนชนกัน)
-  const saveSession = (session) => (queue = queue.then(async () => {
+  // ส่งสำเนาไปฐานข้อมูลกลางของห้องอาจารย์ (Cloudflare KV ผ่าน Worker) · ล้มเหลวเงียบ ๆ ไม่กระทบการเล่น
+  const saveRemote = (session) => {
+    try {
+      if (typeof AI_ENDPOINT === "undefined" || !AI_ENDPOINT || !session || !session.sid) return;
+      fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "save", session }), keepalive: JSON.stringify(session).length < 60000 }).catch(() => {});
+    } catch (e) {}
+  };
+  const saveSession = (session) => (saveRemote(session), queue = queue.then(async () => {
     try {
       const [d, u] = await Promise.all([db(), user()]);
       if (!d || !u) throw new Error("unavailable");
@@ -4083,7 +4090,14 @@ const STORE = (() => {
     }
     try { await dl.save({ filename, data: text }); return "ok"; } catch (e) { return e && e.code ? e.code : "error"; }
   };
-  return { saveSession, canSeeAll, listAll, download };
+  const teacherCall = async (body) => {
+    if (typeof AI_ENDPOINT === "undefined" || !AI_ENDPOINT) return { ok: false, error: "no_endpoint" };
+    try {
+      const r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      return await r.json();
+    } catch (e) { return { ok: false, error: "offline" }; }
+  };
+  return { saveSession, canSeeAll, listAll, download, teacherCall };
 })();
 const newSid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -4166,6 +4180,7 @@ function ProfileScreen({ onDone, onBack, initial }) {
             </button>
             <ul className="text-xs leading-relaxed flex flex-col gap-1 pl-1" style={{ color: "var(--dim)" }}>
               <li>• ใช้เพื่อการศึกษาในรายวิชา USC10967 เท่านั้น ไม่ขายหรือเปิดเผยต่อบุคคลอื่น</li>
+              <li>• ผลการเล่นจะเก็บไว้ในระบบของทีมให้อาจารย์ผู้สอนดูเพื่อดูแลการเรียน (ต้องใช้รหัสอาจารย์) และลบอัตโนมัติภายใน 1 ปี</li>
               <li>• ชื่อหรือรหัสนักศึกษาจะถูกเก็บเฉพาะเมื่อคุณกรอกเองตอนบันทึกภาพผลลัพธ์</li>
               <li>• ผลวิเคราะห์ AI ประมวลผลโดย Google Gemini โดยส่งเฉพาะคะแนนและพฤติกรรมการเล่น ไม่ส่งเพศ อายุ หรือชื่อ</li>
             </ul>
@@ -4577,7 +4592,111 @@ const ABOUT_SAFE = [
    ผลตัวอย่างมาจากการเล่นจริงครบ 10 ข้อ 3 รอบ (คนละสไตล์) เก็บไว้ใน TEACHER_SAMPLES */
 const isTeacherLink = () => { try { const q = new URLSearchParams(window.location.search); return q.has("teacher") || q.has("editor"); } catch (e) { return false; } };
 const STUDENT_LINK = "https://survimind.github.io/survimind/";
-function TeacherScreen({ onBack, onSample, onData, onPlay }) {
+const TEACHER_ERR = {
+  wrong_key: "รหัสอาจารย์ไม่ถูกต้อง",
+  kv_missing: "ยังไม่ได้เชื่อมที่เก็บข้อมูล (KV) ใน Cloudflare · ทำตามขั้นตอนในไฟล์ worker/SETUP.md หัวข้อห้องอาจารย์",
+  teacher_key_missing: "ยังไม่ได้ตั้งรหัสอาจารย์ (TEACHER_KEY) ใน Cloudflare",
+  offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง",
+  forbidden_origin: "เปิดจากเว็บนี้ไม่ได้ ต้องเปิดจาก survimind.github.io",
+};
+const SCEN_TH = { zombie: "ซอมบี้", forest: "หลงป่า", disaster: "สึนามิ" };
+function StudentResults({ onOpen }) {
+  const [key, setKey] = useState(() => { try { return sessionStorage.getItem("sv-teacher-key") || ""; } catch (e) { return ""; } });
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [opening, setOpening] = useState("");
+  const load = async () => {
+    if (!key.trim()) { setErr("ใส่รหัสอาจารย์ก่อน"); return; }
+    setBusy(true); setErr("");
+    const r = await STORE.teacherCall({ mode: "list", key: key.trim() });
+    setBusy(false);
+    if (!r || !r.ok) { setErr(TEACHER_ERR[r && r.error] || "โหลดข้อมูลไม่สำเร็จ (" + ((r && r.error) || "unknown") + ")"); return; }
+    try { sessionStorage.setItem("sv-teacher-key", key.trim()); } catch (e) {}
+    setRows(r.sessions || []);
+  };
+  const open = async (row) => {
+    setOpening(row.sid);
+    const r = await STORE.teacherCall({ mode: "get", key: key.trim(), sid: row.sid });
+    setOpening("");
+    if (!r || !r.ok || !r.session || !r.session.result) { setErr("เปิดผลของรอบนี้ไม่ได้ (ยังเล่นไม่จบ หรือไม่มีข้อมูลผลลัพธ์)"); return; }
+    onOpen(r.session);
+  };
+  const done = (rows || []).filter((x) => x.done);
+  const avg = (k) => { const v = done.map((x) => x[k]).filter((x) => typeof x === "number"); return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : "–"; };
+  const typeCount = {}; done.forEach((x) => { if (x.mb) typeCount[x.mb] = (typeCount[x.mb] || 0) + 1; });
+  const types = Object.entries(typeCount).sort((a, b) => b[1] - a[1]);
+  const scenCount = {}; done.forEach((x) => { if (x.sc) scenCount[x.sc] = (scenCount[x.sc] || 0) + 1; });
+  const fmt = (t) => { try { return t ? new Date(t).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "–"; } catch (e) { return "–"; } };
+  const csv = () => {
+    const head = ["เวลา", "ชื่อ/รหัส", "เพศ", "อายุ", "สถานการณ์", "ตัวละคร", "MBTI", "เวลาตัดสินใจเฉลี่ย(วิ)", "เปลี่ยนใจ(ครั้ง)", "ความจำใช้งาน", "ยับยั้งชั่งใจ", "ยืดหยุ่นทางความคิด", "Health", "Panic", "เล่นจบ"];
+    const lines = (rows || []).map((x) => [fmt(x.t), x.n || "", x.g || "", x.a ?? "", SCEN_TH[x.sc] || "", x.ch ? charById(x.ch).name : "", x.mb || "", x.lat ?? "", x.sw ?? "", x.wm ?? "", x.ic ?? "", x.cf ?? "", x.h ?? "", x.p ?? "", x.done ? "ใช่" : "ยังไม่จบ"]);
+    const text = "\ufeff" + [head, ...lines].map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n");
+    STORE.download("survimind-results.csv", text);
+  };
+  const Stat = ({ label, value, sub }) => (
+    <div className="flex flex-col gap-1 p-4 border min-w-0" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+      <span className="text-sm" style={{ color: "var(--dim)" }}>{label}</span>
+      <span className="f-display font-bold text-3xl tabular-nums" style={{ color: "var(--amber)" }}>{value}</span>
+      {sub && <span className="text-xs" style={{ color: "var(--dim)" }}>{sub}</span>}
+    </div>
+  );
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>2. ผลของนักศึกษาที่เล่นจริง</h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <input id="teacher-key" type="password" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") load(); }} placeholder="รหัสอาจารย์" autoComplete="current-password"
+          className="px-3 py-2 text-base border min-w-0 flex-1" style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--bone)", maxWidth: 280 }} />
+        <TacButton id="teacher-load" icon={busy ? "loader" : "download"} tone="green" disabled={busy} onClick={load}>{rows ? "โหลดใหม่" : "ดูผลของนักศึกษา"}</TacButton>
+        {rows && rows.length > 0 && <button id="teacher-csv" onClick={csv} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border" style={{ borderColor: "var(--line)", color: "var(--bone)" }}><Icon name="file-spreadsheet" size={14} />ดาวน์โหลด CSV</button>}
+      </div>
+      {err && <p className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
+      {rows && (<>
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          <Stat label="เล่นจบแล้ว" value={done.length} sub={"เริ่มเล่นทั้งหมด " + rows.length + " คน"} />
+          <Stat label="เวลาตัดสินใจเฉลี่ย" value={avg("lat") + " วิ"} sub="ต่อข้อ" />
+          <Stat label="เปลี่ยนใจเฉลี่ย" value={avg("sw")} sub="ครั้งต่อคน" />
+          <Stat label="สถานการณ์ที่เล่น" value={Object.keys(scenCount).length ? Object.entries(scenCount).map(([k, v]) => SCEN_TH[k] + " " + v).join(" · ") : "–"} />
+        </div>
+        {types.length > 0 && (
+          <div className="flex flex-col gap-2 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+            <span className="text-sm" style={{ color: "var(--dim)" }}>บุคลิกที่พบ (คน)</span>
+            {types.slice(0, 8).map(([t, c]) => (
+              <div key={t} className="flex items-center gap-3">
+                <span className="f-mono text-sm w-12" style={{ color: "var(--amber)" }}>{t}</span>
+                <div className="flex-1 h-3" style={{ background: "var(--panel-2)" }}><div className="h-full" style={{ width: (c / types[0][1]) * 100 + "%", background: "var(--amber)" }} /></div>
+                <span className="f-mono text-sm w-8 text-right tabular-nums">{c}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {rows.length === 0 ? <p className="text-sm" style={{ color: "var(--dim)" }}>ยังไม่มีนักศึกษาเล่น ส่งลิงก์ด้านล่างให้นักศึกษาก่อน</p> : (
+          <div className="overflow-x-auto border" style={{ borderColor: "var(--line)" }}>
+            <table className="w-full text-sm" style={{ minWidth: 760 }}>
+              <thead><tr style={{ background: "var(--panel-2)", color: "var(--dim)" }}>
+                {["เวลา", "ชื่อ/รหัส", "เพศ · อายุ", "สถานการณ์", "MBTI", "เวลาเฉลี่ย", "เปลี่ยนใจ", "EF (จำ/ยับยั้ง/ยืดหยุ่น)", ""].map((h) => <th key={h} className="text-left font-normal px-3 py-2 whitespace-nowrap">{h}</th>)}
+              </tr></thead>
+              <tbody>{rows.slice(0, 300).map((x) => (
+                <tr key={x.sid} className="border-t" style={{ borderColor: "var(--line)" }}>
+                  <td className="px-3 py-2 whitespace-nowrap tabular-nums">{fmt(x.t)}</td>
+                  <td className="px-3 py-2">{x.n || <span style={{ color: "var(--dim)" }}>–</span>}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{[x.g, x.a].filter((v) => v !== undefined && v !== null && v !== "").join(" · ") || "–"}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{SCEN_TH[x.sc] || "–"}{x.ch ? " · " + charById(x.ch).name : ""}</td>
+                  <td className="px-3 py-2 f-mono" style={{ color: "var(--amber)" }}>{x.mb || (x.done ? "–" : "ยังไม่จบ")}</td>
+                  <td className="px-3 py-2 tabular-nums">{x.lat != null ? x.lat + " วิ" : "–"}</td>
+                  <td className="px-3 py-2 tabular-nums">{x.sw ?? "–"}</td>
+                  <td className="px-3 py-2 tabular-nums whitespace-nowrap">{x.wm != null ? [x.wm, x.ic, x.cf].join(" / ") : "–"}</td>
+                  <td className="px-3 py-2">{x.done && <button onClick={() => open(x)} className="inline-flex items-center gap-1 px-2 py-1 text-xs border whitespace-nowrap" style={{ borderColor: "var(--amber)", color: "var(--amber)" }}>{opening === x.sid ? "กำลังเปิด…" : "ดูผล"}</button>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </>)}
+    </section>
+  );
+}
+function TeacherScreen({ onBack, onSample, onData, onPlay, onOpenStudent }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try { await navigator.clipboard.writeText(STUDENT_LINK); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch (e) {}
@@ -4615,8 +4734,10 @@ function TeacherScreen({ onBack, onSample, onData, onPlay }) {
             <p className="text-sm" style={{ color: "var(--dim)" }}>ผลตัวอย่างมาจากการเล่นจริงครบ 10 ข้อ ส่วน "AI วิเคราะห์" จะเรียก Gemini ใหม่ทุกครั้งที่เปิด</p>
           </section>
 
+          <StudentResults onOpen={onOpenStudent} />
+
           <section className="flex flex-col gap-3">
-            <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>2. ส่งให้นักศึกษาเล่น</h2>
+            <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>3. ส่งให้นักศึกษาเล่น</h2>
             <div className="flex flex-wrap items-center gap-3 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
               <code className="f-mono text-sm sm:text-base break-all" style={{ color: "var(--bone)" }}>{STUDENT_LINK}</code>
               <button id="copy-student-link" onClick={copy} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border" style={{ borderColor: "var(--amber)", color: "var(--amber)" }}>
@@ -4627,7 +4748,7 @@ function TeacherScreen({ onBack, onSample, onData, onPlay }) {
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>3. เครื่องมืออื่น</h2>
+            <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>4. เครื่องมืออื่น</h2>
             <div className="flex flex-wrap gap-3">
               <TacButton id="teacher-data" icon="table" tone="green" onClick={onData}>ข้อมูลผู้ทำแบบทดสอบ</TacButton>
               <TacButton id="teacher-play" icon="gamepad-2" onClick={onPlay}>ลองเล่นเอง</TacButton>
@@ -12091,7 +12212,10 @@ function App() {
           stressReflex: tm.stressReflex, qteTimeouts: tm.qteTimeouts, qte: tm.qte.map((e) => ({ n: e.n, c: e.choice, rt: e.rt, s: e.score })),
           items: { strategy: tm.items.strategy, rm: tm.items.rm, altruism: tm.items.altruism, uses: tm.items.uses, matched: tm.items.matched, wasted: tm.items.wasted, gifts: tm.items.gifts, sigGifted: tm.items.sigGifted, sigUses: tm.items.sigUses, leftover: tm.items.leftover } };
       } catch (e) {}
-      STORE.saveSession({ sid: profile.sid, scenario: scenario || "zombie", character: charId, mbti: type, scores: r.scores, telemetry, code, finishedAt: Date.now() });
+      STORE.saveSession({ sid: profile.sid, scenario: scenario || "zombie", character: charId, mbti: type, scores: r.scores, telemetry, code, finishedAt: Date.now(),
+        gender: profile.gender, age: profile.age, device: profile.device,
+        result: { scores: r.scores, meters: r.meters, inventory: r.inventory, history: r.history, telemetry: r.telemetry,
+          summary: telemetry ? { avgLatency: telemetry.avgLatency, totalSwitches: telemetry.totalSwitches, ef: telemetry.ef } : null } });
     }
   };
   const restart = () => { AUDIO.stopSiren(); setActiveScenario("zombie"); setResult(null); setCharId(null); setScenario(null); setProfile(null); setRunId((r) => r + 1); setScreen("home"); };
@@ -12109,7 +12233,8 @@ function App() {
             <motion.div key={screen + runId} {...fade} className="h-full w-full"><ScreenBoundary>
               {(screen === "splash" || screen === "home") && <SplashScreen instant={screen === "home"} onPlay={() => start(detectDevice())} onData={() => setScreen("data")} onAbout={() => setScreen("about")} onTeacher={() => setScreen("teacher")} />}
               {screen === "teacher" && <TeacherScreen onBack={() => setScreen("home")} onData={() => setScreen("data")} onPlay={() => start(detectDevice())}
-                onSample={(smp) => { setActiveScenario(smp.scenario); setScenario(smp.scenario); setCharId(smp.charId); setDevice(detectDevice()); setResult({ ...smp.r, sample: true }); setScreen("result"); }} />}
+                onSample={(smp) => { setActiveScenario(smp.scenario); setScenario(smp.scenario); setCharId(smp.charId); setDevice(detectDevice()); setResult({ ...smp.r, sample: true }); setScreen("result"); }}
+                onOpenStudent={(ss) => { const sc = ss.scenario || "zombie"; setActiveScenario(sc); setScenario(sc); setCharId(ss.character || "ek"); setDevice(detectDevice()); setResult({ ...ss.result, code: ss.code, sid: ss.sid, sample: true }); setScreen("result"); }} />}
               {screen === "about" && <AboutScreen onBack={() => setScreen("home")} onPlay={() => start(detectDevice())} />}
               {screen === "title" && <TitleScreen onStart={start} onData={() => setScreen("data")} />}
               {screen === "profile" && <ProfileScreen onDone={submitProfile} onBack={() => setScreen("home")} initial={profile} />}
