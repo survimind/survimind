@@ -66,7 +66,7 @@ export default {
     };
 
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-    if (request.method === "GET") return json({ ok: true, service: "survimind-ai" }, 200, cors);
+    if (request.method === "GET") return json({ ok: true, service: "survimind-ai", ai: !!env.GEMINI_API_KEY, storage: !!env.SESSIONS, teacherKey: !!env.TEACHER_KEY }, 200, cors);   // บอกแค่ว่าตั้งค่าครบไหม ไม่เปิดเผยค่าจริง
     if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
     if (!okOrigin) return json({ ok: false, error: "forbidden_origin" }, 403, cors);
 
