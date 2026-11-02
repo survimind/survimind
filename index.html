@@ -11226,8 +11226,9 @@ function AIAnalysisSection({ result, char, type, tm, wide }) {
   const toggle = (i) => setChecked((c) => { const n = { ...c, [i]: !c[i] }; aiCacheSet(key + ":plan", n); return n; });
   const regenerate = () => { aiCacheDel(key); setRun((r) => r + 1); };
   const two = wide ? "grid-cols-2" : "grid-cols-1";
+  const [more, setMore] = useState(false);
   const List = ({ items, color }) => (
-    <ul className="flex flex-col gap-2 text-sm leading-relaxed">
+    <ul className="flex flex-col gap-2 text-[15px] leading-relaxed">
       {items.map((t, i) => <li key={i} className="flex gap-2"><span className="mt-2 w-1.5 h-1.5 shrink-0" style={{ background: color }} /><span>{t}</span></li>)}
     </ul>
   );
@@ -11266,8 +11267,17 @@ function AIAnalysisSection({ result, char, type, tm, wide }) {
       )}
 
       {state.status === "done" && rp && (<>
-        <p className="leading-relaxed text-base" style={{ color: "var(--bone)" }}>{rp.summary}</p>
+        <p className="leading-relaxed text-lg sm:text-xl f-display" style={{ color: "var(--bone)" }}>{rp.summary}</p>
 
+        <div className={"grid gap-4 " + two}>
+          {rp.strengths.length > 0 && <div className="flex flex-col gap-2 p-4" style={{ background: "var(--panel-2)", borderLeft: "3px solid var(--green)" }}><Label icon="shield-check">จุดแข็งของคุณ</Label><List items={rp.strengths.slice(0, 2)} color="var(--green)" /></div>}
+          {rp.growth_areas.length > 0 && <div className="flex flex-col gap-2 p-4" style={{ background: "var(--panel-2)", borderLeft: "3px solid var(--amber)" }}><Label icon="flag">สิ่งที่ควรฝึกต่อ</Label><List items={rp.growth_areas.slice(0, 2)} color="var(--amber)" /></div>}
+        </div>
+
+        <button onClick={() => { AUDIO.play("click"); setMore((m) => !m); }} aria-expanded={more} className="self-start inline-flex items-center gap-2 px-3 py-2 text-sm border" style={{ borderColor: "var(--amber)", color: "var(--amber)" }}>
+          <Icon name={more ? "chevron-up" : "chevron-down"} size={14} />{more ? "ซ่อนคำแนะนำเพิ่มเติม" : "ดูคำแนะนำเพิ่มเติมจาก AI (ช่วงเวลาสำคัญ · วิธีเรียน · ความเครียด)"}
+        </button>
+        {more && (<>
         {rp.key_moments && rp.key_moments.length > 0 && (
           <div className="flex flex-col gap-3">
             <Label icon="scan-eye">ช่วงเวลาสำคัญที่ AI สังเกตเห็น</Label>
@@ -11285,18 +11295,24 @@ function AIAnalysisSection({ result, char, type, tm, wide }) {
         )}
 
         <div className={"grid gap-5 " + two}>
-          {rp.strengths.length > 0 && <div className="flex flex-col gap-2 p-3" style={{ background: "var(--panel-2)" }}><Label icon="shield-check">จุดแข็ง</Label><List items={rp.strengths} color="var(--green)" /></div>}
-          {rp.growth_areas.length > 0 && <div className="flex flex-col gap-2 p-3" style={{ background: "var(--panel-2)" }}><Label icon="flag">จุดที่พัฒนาได้</Label><List items={rp.growth_areas} color="var(--amber)" /></div>}
           {rp.study_strategies.length > 0 && <div className="flex flex-col gap-2 p-3" style={{ background: "var(--panel-2)" }}><Label icon="book-open">กลยุทธ์การเรียนสำหรับคุณ</Label><List items={rp.study_strategies} color="var(--amber)" /></div>}
           {rp.stress_tips.length > 0 && <div className="flex flex-col gap-2 p-3" style={{ background: "var(--panel-2)" }}><Label icon="heart-pulse">รับมือความเครียด</Label><List items={rp.stress_tips} color="var(--green)" /></div>}
         </div>
+
+        {rp.group_work_role && (
+          <div className="flex gap-3 p-3 border-l-2 text-[15px] leading-relaxed" style={{ borderColor: "var(--green)", background: "rgba(132,166,90,.08)" }}>
+            <span className="shrink-0 mt-0.5" style={{ color: "var(--green)" }}><Icon name="users" size={16} /></span>
+            <span><span className="f-display font-semibold" style={{ color: "var(--green)" }}>บทบาทในงานกลุ่ม · </span>{rp.group_work_role}</span>
+          </div>
+        )}
+        </>)}
 
         {rp.seven_day_plan && rp.seven_day_plan.length > 0 && (
           <div className="flex flex-col gap-2">
             <Label icon="calendar-check">แผน 7 วันของคุณ · ติ๊กเมื่อทำแล้ว</Label>
             <div className={"grid gap-2 " + (wide ? "grid-cols-2" : "grid-cols-1")}>
               {rp.seven_day_plan.map((d, i) => (
-                <button key={i} onClick={() => toggle(i)} aria-pressed={!!checked[i]} className="flex items-start gap-3 p-3 text-left text-sm leading-relaxed border"
+                <button key={i} onClick={() => toggle(i)} aria-pressed={!!checked[i]} className="flex items-start gap-3 p-3 text-left text-[15px] leading-relaxed border"
                   style={{ borderColor: checked[i] ? "var(--green)" : "var(--line)", background: checked[i] ? "rgba(132,166,90,.1)" : "transparent" }}>
                   <span className="shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center border" style={{ borderColor: checked[i] ? "var(--green)" : "var(--dim)", background: checked[i] ? "var(--green)" : "transparent", color: "#111311" }}>{checked[i] ? <Icon name="check" size={14} /> : null}</span>
                   <span><span className="f-mono text-xs" style={{ color: "var(--amber)" }}>วันที่ {d.day}</span><br /><span style={{ textDecoration: checked[i] ? "line-through" : "none", opacity: checked[i] ? 0.7 : 1 }}>{d.action}</span></span>
@@ -11306,12 +11322,6 @@ function AIAnalysisSection({ result, char, type, tm, wide }) {
           </div>
         )}
 
-        {rp.group_work_role && (
-          <div className="flex gap-3 p-3 border-l-2 text-sm leading-relaxed" style={{ borderColor: "var(--green)", background: "rgba(132,166,90,.08)" }}>
-            <span className="shrink-0 mt-0.5" style={{ color: "var(--green)" }}><Icon name="users" size={16} /></span>
-            <span><span className="f-display font-semibold" style={{ color: "var(--green)" }}>บทบาทในงานกลุ่ม · </span>{rp.group_work_role}</span>
-          </div>
-        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <p className="text-xs leading-relaxed max-w-2xl" style={{ color: "var(--dim)" }}>ผลนี้สร้างโดย AI จากพฤติกรรมในเกม เป็นเครื่องมือสะท้อนตัวเอง ไม่ใช่การวินิจฉัยทางจิตวิทยา ถ้ารู้สึกเครียดหรือไม่สบายใจ คุยกับศูนย์ให้คำปรึกษาของมหาวิทยาลัย หรือโทร 1323 ได้ตลอด 24 ชั่วโมง</p>
@@ -11332,11 +11342,36 @@ function AIAnalysisSection({ result, char, type, tm, wide }) {
 // ทางลัดในหน้าผลลัพธ์ (id มาจาก eyebrow ของแต่ละ Section)
 const secId = (eyebrow) => "sec-" + String(eyebrow || "").toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
 const RESULT_JUMPS = {
-  student: [["sec-ai", "sparkles", "AI วิเคราะห์"], [secId("MBTI Breakdown"), "sliders-horizontal", "บุคลิก 4 มิติ"], [secId("Learning & Study Style"), "book-open", "การเรียน"],
-    [secId("Group Work Role"), "users", "งานกลุ่ม"], [secId("Personalized Learning Strategy & Barrier Reduction"), "route", "กลยุทธ์เฉพาะตัว"], [secId("Productivity & Stress Management"), "shield-half", "ความเครียด"]],
+  student: [["sec-key", "target", "สรุปสำคัญ"], ["sec-ai", "sparkles", "AI วิเคราะห์"], ["sec-detail", "list", "ผลละเอียดทั้งหมด"]],
   coach: [[secId("Decision Latency"), "chart-column", "เวลาตัดสินใจ"], [secId("Executive Functions"), "cpu", "ทักษะสมอง"], [secId("Pressure Adaptation Matrix"), "gauge", "แรงกดดัน"],
     [secId("Resource Strategy"), "backpack", "ไอเทม"], [secId("Coaching notes"), "clipboard-list", "แนวทางผู้สอน"]],
 };
+// สรุปสำคัญ 4 ข้อ อ่านจบใน 30 วินาที (รายละเอียดทั้งหมดพับไว้ด้านล่าง)
+function KeyTakeaways({ report, card, wide }) {
+  const items = [
+    { icon: "book-open", color: "var(--green)", label: "เรียนแบบนี้ได้ผลกับคุณ", title: report.study.title, text: (report.study.tips || [])[0] },
+    { icon: "users", color: "var(--amber)", label: "บทบาทที่เหมาะในงานกลุ่ม", title: report.group.role, text: (report.group.duties || [])[0] },
+    { icon: "triangle-alert", color: "var(--red)", label: "จุดที่ควรระวัง", title: card.barrierTitle, text: card.barrierTip },
+    { icon: "heart-pulse", color: "var(--green)", label: "เมื่อเครียด ลองทำแบบนี้", title: "วิธีรับมือที่เหมาะกับคุณ", text: report.stress.cope },
+  ];
+  return (
+    <motion.section variants={rise} id="sec-key" className="flex flex-col gap-3" style={{ scrollMarginTop: 128 }}>
+      <div className="flex flex-col gap-1">
+        <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="target" size={14} />สรุปสำคัญ</span>
+        <h3 className="f-display font-bold text-2xl sm:text-3xl">4 เรื่องที่ควรรู้เกี่ยวกับตัวคุณ</h3>
+      </div>
+      <div className={"grid gap-3 " + (wide ? "grid-cols-2" : "grid-cols-1")}>
+        {items.map((it) => (
+          <div key={it.label} className="flex flex-col gap-2 p-5 border min-w-0" style={{ borderColor: "var(--line)", borderTop: "3px solid " + it.color, background: "var(--panel)" }}>
+            <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: it.color }}><Icon name={it.icon} size={18} />{it.label}</span>
+            <p className="f-display font-bold text-xl leading-snug" style={{ color: "var(--bone)" }}>{it.title}</p>
+            {it.text && <p className="text-[15px] leading-relaxed" style={{ color: "var(--bone)", opacity: 0.9 }}>{it.text}</p>}
+          </div>
+        ))}
+      </div>
+    </motion.section>
+  );
+}
 function ResultScreen({ device, charId, result, onRestart }) {
   const char = charById(charId);
   const wide = device === "pc";
@@ -11349,6 +11384,10 @@ function ResultScreen({ device, charId, result, onRestart }) {
   const [armed, setArmed] = useState(false);
   const tm = useMemo(() => analyzeTelemetry(result.telemetry), [result]);
   const [tab, setTab] = useState("student");
+  // แท็บ Teacher & Coach สำหรับอาจารย์เท่านั้น: เปิดด้วยลิงก์ ?teacher (หรือ ?editor) · ผู้เล่นทั่วไปเห็นแค่ผลของตัวเอง
+  const editorMode = useIsEditor();
+  const teacherMode = editorMode || (() => { try { return new URLSearchParams(window.location.search).has("teacher"); } catch (e) { return false; } })();
+  const [detail, setDetail] = useState(false);
   const [jump, setJump] = useState(null);
   useEffect(() => setJump(null), [tab]);
   const [cardOpen, setCardOpen] = useState(false);
@@ -11406,7 +11445,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
   useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 4000); return () => clearTimeout(t); }, [armed]);
 
   const Bullets = ({ items, color = "var(--amber)" }) => (
-    <ul className="flex flex-col gap-2 text-sm leading-relaxed">
+    <ul className="flex flex-col gap-2 text-[15px] leading-relaxed">
       {items.map((t, i) => <li key={i} className="flex gap-2"><span className="mt-2 w-1.5 h-1.5 shrink-0" style={{ background: color }} /><span>{t}</span></li>)}
     </ul>
   );
@@ -11475,7 +11514,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
 
           {/* Tabs + ทางลัดไปแต่ละส่วน */}
           <motion.div variants={rise} className="sticky top-0 z-10 flex flex-col gap-1" style={{ background: "rgba(17,19,17,.95)", backdropFilter: "blur(6px)" }}>
-          <div role="tablist" aria-label="มุมมองผลลัพธ์" className="grid grid-cols-2 gap-1 p-1 border" style={{ borderColor: "var(--line)" }}>
+          {teacherMode && <div role="tablist" aria-label="มุมมองผลลัพธ์" className="grid grid-cols-2 gap-1 p-1 border" style={{ borderColor: "var(--line)" }}>
             {[["student", "user-round", "Student Profile", "ผลของผู้เรียน"], ["coach", "layout-dashboard", "Teacher & Coach", "แดชบอร์ดผู้สอน/โค้ช"]].map(([k, ic, en, th]) => (
               <button key={k} id={"tab-" + k} role="tab" aria-selected={tab === k} onClick={() => { if (tab !== k) { AUDIO.play("click"); setTab(k); } }}
                 className="cut flex items-center justify-center gap-2 px-3 py-2.5 text-left min-w-0"
@@ -11484,10 +11523,10 @@ function ResultScreen({ device, charId, result, onRestart }) {
                 <span className="flex flex-col min-w-0 leading-tight"><span className="f-display font-bold text-[13px] sm:text-base">{en}</span><span className="text-[11px]" style={{ opacity: 0.75 }}>{th}</span></span>
               </button>
             ))}
-          </div>
+          </div>}
           <nav aria-label="ทางลัดในหน้าผลลัพธ์" className="flex gap-1.5 overflow-x-auto scroll-thin pb-1">
             {(tab === "student" ? RESULT_JUMPS.student : tm.hasData ? RESULT_JUMPS.coach : []).filter(([id]) => id !== "sec-ai" || AI_ENDPOINT).map(([id, ic, label]) => (
-              <button key={id} onClick={() => { AUDIO.play("hover"); setJump(id); const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+              <button key={id} onClick={() => { AUDIO.play("hover"); setJump(id); if (id === "sec-detail") setDetail(true); setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, id === "sec-detail" ? 60 : 0); }}
                 className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border whitespace-nowrap"
                 style={jump === id ? { borderColor: "var(--amber)", color: "var(--amber)", background: "rgba(242,163,58,.1)" } : { borderColor: "var(--line)", color: "var(--dim)" }}>
                 <Icon name={ic} size={12} />{label}
@@ -11498,7 +11537,15 @@ function ResultScreen({ device, charId, result, onRestart }) {
 
           <motion.div key={tab} variants={tabStagger} initial="hidden" animate="show" className="flex flex-col gap-6" role="tabpanel">
           {tab === "student" ? (<>
+          <KeyTakeaways report={report} card={cardData} wide={wide} />
           <AIAnalysisSection result={result} char={char} type={type} tm={tm} wide={wide} />
+          <motion.button variants={rise} id="sec-detail" onClick={() => { AUDIO.play("click"); setDetail((d) => !d); }} aria-expanded={detail}
+            className="w-full flex items-center justify-between gap-3 p-4 border text-left" style={{ scrollMarginTop: 128, borderColor: "var(--line)", background: "var(--panel)" }}>
+            <span className="flex flex-col gap-0.5"><span className="f-display font-bold text-lg">{detail ? "ซ่อนผลวิเคราะห์แบบละเอียด" : "ดูผลวิเคราะห์แบบละเอียดทั้งหมด"}</span>
+              <span className="text-sm" style={{ color: "var(--dim)" }}>บุคลิก 4 มิติ · วิธีเรียน · งานกลุ่ม · กลยุทธ์เฉพาะตัว · ความเครียด · เส้นทางสภาพทีม</span></span>
+            <span style={{ color: "var(--amber)" }}><Icon name={detail ? "chevron-up" : "chevron-down"} size={22} /></span>
+          </motion.button>
+          {detail && (<>
           {/* MBTI breakdown + ความหมายของแต่ละขั้ว */}
           <Section icon="sliders-horizontal" eyebrow="MBTI Breakdown" title="บุคลิกของคุณทั้ง 4 มิติ"
             lead="แต่ละมิติคำนวณจากคำตอบทั้ง 10 ข้อ ตัวเลขเปอร์เซ็นต์บอกว่าคุณเอนไปทางขั้วไหนมากแค่ไหน ยิ่งห่างจาก 50% ยิ่งเป็นตัวตนที่ชัดของคุณ">
@@ -11650,6 +11697,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
             </motion.section>
           )}
 
+          </>)}
           </>) : (<>
           <motion.div variants={rise} className="flex flex-col gap-1">
             <span className="lbl" style={{ color: "var(--amber)" }}>Teacher & Coach Analytics · {char.name} · {type}</span>
