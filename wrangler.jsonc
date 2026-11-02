@@ -5,5 +5,9 @@
   "name": "survimind-ai",
   "main": "worker/worker.js",
   "compatibility_date": "2026-06-01",
-  "keep_vars": true
+  "keep_vars": true,
+  // ที่เก็บผลของนักศึกษาสำหรับห้องอาจารย์ (Cloudflare KV "survimind-sessions") · ID ไม่ใช่ความลับ
+  "kv_namespaces": [
+    { "binding": "SESSIONS", "id": "3f11e7bb47534b158215b5f3a0d711c9" }
+  ]
 }

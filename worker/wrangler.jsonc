@@ -5,5 +5,9 @@
   "main": "worker.js",
   "compatibility_date": "2026-06-01",
   // เก็บตัวแปรที่ตั้งไว้ในหน้า Cloudflare ไว้ ไม่ลบทิ้งตอน deploy (API key เป็น Secret ไม่ถูกลบอยู่แล้ว)
-  "keep_vars": true
+  "keep_vars": true,
+  // ที่เก็บผลของนักศึกษาสำหรับห้องอาจารย์ (Cloudflare KV "survimind-sessions") · ID ไม่ใช่ความลับ
+  "kv_namespaces": [
+    { "binding": "SESSIONS", "id": "3f11e7bb47534b158215b5f3a0d711c9" }
+  ]
 }
