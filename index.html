@@ -4693,15 +4693,17 @@ function StudentResults({ onOpen }) {
     if (!r || !r.ok || !r.session || !r.session.result) { setErr("เปิดผลของรอบนี้ไม่ได้ (ยังเล่นไม่จบ หรือไม่มีข้อมูลผลลัพธ์)"); return; }
     onOpen(r.session);
   };
-  const done = (rows || []).filter((x) => x.done);
+  const done = (rows || []).filter((x) => x.done && !(typeof x.lat === "number" && x.lat < 1));   // ไม่นับรอบที่ทีมกดข้ามด้วย Editor (เวลา 0 วิ)
+  const grpCount = {}; done.forEach((x) => { const g = learnerGroupOf(x); if (g) grpCount[g.id] = (grpCount[g.id] || 0) + 1; });
+  const grpTotal = Object.values(grpCount).reduce((a, b) => a + b, 0);
   const avg = (k) => { const v = done.map((x) => x[k]).filter((x) => typeof x === "number"); return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : "–"; };
   const typeCount = {}; done.forEach((x) => { if (x.mb) typeCount[x.mb] = (typeCount[x.mb] || 0) + 1; });
   const types = Object.entries(typeCount).sort((a, b) => b[1] - a[1]);
   const scenCount = {}; done.forEach((x) => { if (x.sc) scenCount[x.sc] = (scenCount[x.sc] || 0) + 1; });
   const fmt = (t) => { try { return t ? new Date(t).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "–"; } catch (e) { return "–"; } };
   const csv = () => {
-    const head = ["เวลา", "ชื่อ/รหัส", "เพศ", "อายุ", "สถานการณ์", "ตัวละคร", "MBTI", "เวลาตัดสินใจเฉลี่ย(วิ)", "เปลี่ยนใจ(ครั้ง)", "ความจำใช้งาน", "ยับยั้งชั่งใจ", "ยืดหยุ่นทางความคิด", "Health", "Panic", "เล่นจบ"];
-    const lines = (rows || []).map((x) => [fmt(x.t), x.n || "", x.g || "", x.a ?? "", SCEN_TH[x.sc] || "", x.ch ? charById(x.ch).name : "", x.mb || "", x.lat ?? "", x.sw ?? "", x.wm ?? "", x.ic ?? "", x.cf ?? "", x.h ?? "", x.p ?? "", x.done ? "ใช่" : "ยังไม่จบ"]);
+    const head = ["เวลา", "ชื่อ/รหัส", "เพศ", "อายุ", "สถานการณ์", "ตัวละคร", "MBTI", "ประเภทผู้เรียน", "เวลาตัดสินใจเฉลี่ย(วิ)", "เปลี่ยนใจ(ครั้ง)", "ความจำใช้งาน", "ยับยั้งชั่งใจ", "ยืดหยุ่นทางความคิด", "Health", "Panic", "เล่นจบ"];
+    const lines = (rows || []).map((x) => [fmt(x.t), x.n || "", x.g || "", x.a ?? "", SCEN_TH[x.sc] || "", x.ch ? charById(x.ch).name : "", x.mb || "", (x.done && learnerGroupOf(x) || {}).name || "", x.lat ?? "", x.sw ?? "", x.wm ?? "", x.ic ?? "", x.cf ?? "", x.h ?? "", x.p ?? "", x.done ? "ใช่" : "ยังไม่จบ"]);
     const text = "\ufeff" + [head, ...lines].map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n");
     STORE.download("survimind-results.csv", text);
   };
@@ -4729,6 +4731,27 @@ function StudentResults({ onOpen }) {
           <Stat label="เปลี่ยนใจเฉลี่ย" value={avg("sw")} sub="ครั้งต่อคน" />
           <Stat label="สถานการณ์ที่เล่น" value={Object.keys(scenCount).length ? Object.entries(scenCount).map(([k, v]) => SCEN_TH[k] + " " + v).join(" · ") : "–"} />
         </div>
+        {grpTotal > 0 && (
+          <div className="flex flex-col gap-3 p-4 border" style={{ borderColor: "var(--amber)", background: "var(--panel)" }}>
+            <span className="f-display font-bold text-lg" style={{ color: "var(--amber)" }}>ประเภทผู้เรียนในห้อง ({grpTotal} คน)</span>
+            <div className="flex h-6 w-full overflow-hidden" role="img" aria-label="สัดส่วนประเภทผู้เรียน">
+              {LEARNER_GROUPS.filter((g) => grpCount[g.id]).map((g) => <div key={g.id} title={g.name} style={{ width: (grpCount[g.id] / grpTotal) * 100 + "%", background: g.color }} />)}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {LEARNER_GROUPS.map((g) => (
+                <div key={g.id} className="flex items-center gap-3 text-sm">
+                  <span className="w-3 h-3 shrink-0" style={{ background: g.color }} />
+                  <span className="flex-1">{g.name}</span>
+                  <span className="f-mono tabular-nums">{grpCount[g.id] || 0} คน · {Math.round(((grpCount[g.id] || 0) / grpTotal) * 100)}%</span>
+                </div>
+              ))}
+            </div>
+            <details className="text-sm">
+              <summary className="cursor-pointer" style={{ color: "var(--amber)" }}>ตารางประเภทผู้เรียน · เกณฑ์ จุดแข็ง วิธีอ่าน และสิ่งที่ผู้สอนควรทำ</summary>
+              <div className="grid gap-3 mt-3 sm:grid-cols-2">{LEARNER_GROUPS.map((g) => <GroupCard key={g.id} g={g} />)}</div>
+            </details>
+          </div>
+        )}
         {types.length > 0 && (
           <div className="flex flex-col gap-2 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
             <span className="text-sm" style={{ color: "var(--dim)" }}>บุคลิกที่พบ (คน)</span>
@@ -4743,9 +4766,9 @@ function StudentResults({ onOpen }) {
         )}
         {rows.length === 0 ? <p className="text-sm" style={{ color: "var(--dim)" }}>ยังไม่มีนักศึกษาเล่น ส่งลิงก์ด้านล่างให้นักศึกษาก่อน</p> : (
           <div className="overflow-x-auto border" style={{ borderColor: "var(--line)" }}>
-            <table className="w-full text-sm" style={{ minWidth: 760 }}>
+            <table className="w-full text-sm" style={{ minWidth: 900 }}>
               <thead><tr style={{ background: "var(--panel-2)", color: "var(--dim)" }}>
-                {["เวลา", "ชื่อ/รหัส", "เพศ · อายุ", "สถานการณ์", "MBTI", "เวลาเฉลี่ย", "เปลี่ยนใจ", "EF (จำ/ยับยั้ง/ยืดหยุ่น)", ""].map((h) => <th key={h} className="text-left font-normal px-3 py-2 whitespace-nowrap">{h}</th>)}
+                {["เวลา", "ชื่อ/รหัส", "เพศ · อายุ", "สถานการณ์", "MBTI", "ประเภทผู้เรียน", "เวลาเฉลี่ย", "เปลี่ยนใจ", "EF (จำ/ยับยั้ง/ยืดหยุ่น)", ""].map((h) => <th key={h} className="text-left font-normal px-3 py-2 whitespace-nowrap">{h}</th>)}
               </tr></thead>
               <tbody>{rows.slice(0, 300).map((x) => (
                 <tr key={x.sid} className="border-t" style={{ borderColor: "var(--line)" }}>
@@ -4754,6 +4777,7 @@ function StudentResults({ onOpen }) {
                   <td className="px-3 py-2 whitespace-nowrap">{[x.g, x.a].filter((v) => v !== undefined && v !== null && v !== "").join(" · ") || "–"}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{SCEN_TH[x.sc] || "–"}{x.ch ? " · " + charById(x.ch).name : ""}</td>
                   <td className="px-3 py-2 f-mono" style={{ color: "var(--amber)" }}>{x.mb || (x.done ? "–" : "ยังไม่จบ")}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{(() => { const g = x.done && learnerGroupOf(x); return g ? <span style={{ color: g.color }}>{g.name}</span> : "–"; })()}</td>
                   <td className="px-3 py-2 tabular-nums">{x.lat != null ? x.lat + " วิ" : "–"}</td>
                   <td className="px-3 py-2 tabular-nums">{x.sw ?? "–"}</td>
                   <td className="px-3 py-2 tabular-nums whitespace-nowrap">{x.wm != null ? [x.wm, x.ic, x.cf].join(" / ") : "–"}</td>
@@ -11675,7 +11699,61 @@ const RESULT_JUMPS = {
     [secId("Resource Strategy"), "backpack", "ไอเทม"], [secId("Coaching notes"), "clipboard-list", "แนวทางผู้สอน"]],
 };
 // สรุปสำคัญ 4 ข้อ อ่านจบใน 30 วินาที (รายละเอียดทั้งหมดพับไว้ด้านล่าง)
-function KeyTakeaways({ report, card, wide }) {
+/* ===== ประเภทผู้เรียน 5 กลุ่ม (จัดจากพฤติกรรมในเกม: ความเร็วตัดสินใจ × ความนิ่งภายใต้แรงกดดัน) =====
+   ใช้ข้อมูลชุดเดียวกันทั้งหน้าผู้เรียนและห้องอาจารย์: lat = เวลาตัดสินใจเฉลี่ย (วิ) · sw = เปลี่ยนใจรวม (ครั้ง) · p = Panic ตอนจบ · h = Health ตอนจบ
+   เกณฑ์ตั้งจากผู้เล่นจริง 21 คนแรก (มัธยฐานเวลา ≈ 12 วิ/ข้อ) */
+const GROUP_FAST_SEC = 12, GROUP_STEADY_SW = 2;
+const LEARNER_GROUPS = [
+  { id: "support", name: "ต้องการแรงหนุน", en: "Needs Support", icon: "life-buoy", color: "#e5372c",
+    rule: "Panic ตอนจบ ≥ 70 หรือ Health ≤ 30 (ความเครียดสะสมสูงตลอดเกม)",
+    strength: "รับรู้ความเสี่ยงไว ใส่ใจผลกระทบต่อคนรอบตัว",
+    growth: "ความเครียดสะสมจนกระทบการตัดสินใจ ต้องการตัวช่วยจัดการความกดดัน",
+    study: "แบ่งงานเป็นชิ้นเล็กที่ทำเสร็จได้ใน 20 นาที · ตั้งเป้ารายวันแทนรายสัปดาห์ · พักสั้นทุกชั่วโมง",
+    teacher: "พูดคุยรายบุคคลก่อนช่วงสอบ · แจ้งช่องทางศูนย์ให้คำปรึกษา/สายด่วน 1323 · ให้ feedback บ่อยและเร็ว" },
+  { id: "rusher", name: "นักลุยฉับไว", en: "Quick Responder", icon: "zap", color: "#f2a33a",
+    rule: "เวลาเฉลี่ย ≤ " + GROUP_FAST_SEC + " วิ/ข้อ และเปลี่ยนใจ ≤ " + GROUP_STEADY_SW + " ครั้ง",
+    strength: "ตัดสินใจไว กล้าลงมือ พาทีมเดินหน้าในสถานการณ์เร่งด่วน",
+    growth: "อาจเลือกก่อนอ่านข้อมูลครบ พลาดรายละเอียดเล็ก ๆ",
+    study: "ฝึกทำโจทย์จับเวลา แต่บังคับอ่านคำถามจบก่อนตอบ · ใช้ checklist ตรวจคำตอบ 3 ข้อก่อนส่ง",
+    teacher: "ให้บทบาทนำในงานกลุ่มช่วงลงมือ · เพิ่มขั้น 'ตรวจทาน' ในงานที่มอบหมาย · ชมเมื่อรอบคอบ ไม่ใช่แค่เร็ว" },
+  { id: "planner", name: "นักวางแผนรอบคอบ", en: "Steady Planner", icon: "map", color: "#84a65a",
+    rule: "เวลาเฉลี่ย > " + GROUP_FAST_SEC + " วิ/ข้อ และเปลี่ยนใจ ≤ " + GROUP_STEADY_SW + " ครั้ง",
+    strength: "คิดครบก่อนตัดสินใจ มั่นคง ไม่หวั่นไหวง่าย",
+    growth: "อาจใช้เวลานานในสถานการณ์ที่ต้องรีบ ทำข้อสอบไม่ทันเวลา",
+    study: "วางแผนอ่านล่วงหน้าเป็นตาราง · ฝึกข้อสอบเสมือนจริงแบบจับเวลา · กำหนดเวลาสูงสุดต่อข้อ",
+    teacher: "ให้รับผิดชอบการวางแผนงานกลุ่ม · ให้เวลาเตรียมตัวก่อนนำเสนอ · ฝึกแบบทดสอบจับเวลาเป็นระยะ" },
+  { id: "switcher", name: "นักลองผิดลองถูก", en: "Fast Switcher", icon: "shuffle", color: "#5fa8d3",
+    rule: "เวลาเฉลี่ย ≤ " + GROUP_FAST_SEC + " วิ/ข้อ แต่เปลี่ยนใจ > " + GROUP_STEADY_SW + " ครั้ง",
+    strength: "ปรับตัวไว ยืดหยุ่น เปิดรับทางเลือกใหม่",
+    growth: "ลังเลกลับไปกลับมาจนเสียสมาธิ ยังไม่มั่นใจในเหตุผลของตัวเอง",
+    study: "เขียนเหตุผลสั้น ๆ 1 บรรทัดก่อนเลือกคำตอบ · ทบทวนด้วย flashcard ให้มั่นใจในพื้นฐาน",
+    teacher: "ให้ feedback ทันทีหลังทำแบบฝึก · ชวนอธิบายเหตุผลของคำตอบ · เสริมความมั่นใจเมื่อคิดถูก" },
+  { id: "ponderer", name: "นักคิดที่ชั่งใจนาน", en: "Careful Ponderer", icon: "hourglass", color: "#b98bd9",
+    rule: "เวลาเฉลี่ย > " + GROUP_FAST_SEC + " วิ/ข้อ และเปลี่ยนใจ > " + GROUP_STEADY_SW + " ครั้ง",
+    strength: "มองหลายมุม ระวังผลเสีย ไม่ด่วนสรุป",
+    growth: "คิดวนจนตัดสินใจไม่ได้ (Analysis Paralysis) โดยเฉพาะเมื่อข้อมูลไม่ครบ",
+    study: "จำกัดตัวเลือกเหลือ 2 ข้อแล้วตัดสินใจ · ตั้งเวลาต่อข้อ · สรุปเนื้อหาเป็นแผนผังเพื่อเห็นภาพรวม",
+    teacher: "ให้โจทย์ที่มีกรอบชัด · ตั้ง deadline ย่อย · ชวนตัดสินใจในกลุ่มเล็กก่อนกลุ่มใหญ่" },
+];
+function learnerGroupOf(m) {
+  if (!m || typeof m.lat !== "number" || m.lat < 1) return null;   // ไม่มีข้อมูล หรือรอบที่ทีมกดข้ามด้วย Editor
+  if ((typeof m.p === "number" && m.p >= 70) || (typeof m.h === "number" && m.h <= 30)) return LEARNER_GROUPS[0];
+  const fast = m.lat <= GROUP_FAST_SEC, steady = (m.sw || 0) <= GROUP_STEADY_SW;
+  return LEARNER_GROUPS.find((g) => g.id === (fast ? (steady ? "rusher" : "switcher") : (steady ? "planner" : "ponderer")));
+}
+function GroupCard({ g, compact = false }) {
+  return (
+    <div className="flex flex-col gap-2 p-4 border min-w-0" style={{ borderColor: "var(--line)", borderTop: "3px solid " + g.color, background: "var(--panel)" }}>
+      <span className="inline-flex items-center gap-2 f-display font-bold text-lg" style={{ color: g.color }}><Icon name={g.icon} size={18} />{g.name} <span className="text-xs font-normal" style={{ color: "var(--dim)" }}>{g.en}</span></span>
+      <p className="text-xs" style={{ color: "var(--dim)" }}>เกณฑ์: {g.rule}</p>
+      <p className="text-sm"><b style={{ color: "var(--green)" }}>จุดแข็ง</b> {g.strength}</p>
+      <p className="text-sm"><b style={{ color: "var(--amber)" }}>ควรพัฒนา</b> {g.growth}</p>
+      <p className="text-sm"><b>วิธีอ่านหนังสือ</b> {g.study}</p>
+      {!compact && <p className="text-sm"><b style={{ color: "#5fa8d3" }}>ผู้สอนควร</b> {g.teacher}</p>}
+    </div>
+  );
+}
+function KeyTakeaways({ report, card, wide, group }) {
   const items = [
     { icon: "book-open", color: "var(--green)", label: "เรียนแบบนี้ได้ผลกับคุณ", title: report.study.title, text: (report.study.tips || [])[0] },
     { icon: "users", color: "var(--amber)", label: "บทบาทที่เหมาะในงานกลุ่ม", title: report.group.role, text: (report.group.duties || [])[0] },
@@ -11686,8 +11764,16 @@ function KeyTakeaways({ report, card, wide }) {
     <motion.section variants={rise} id="sec-key" className="flex flex-col gap-3" style={{ scrollMarginTop: 128 }}>
       <div className="flex flex-col gap-1">
         <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="target" size={14} />สรุปสำคัญ</span>
-        <h3 className="f-display font-bold text-2xl sm:text-3xl">4 เรื่องที่ควรรู้เกี่ยวกับตัวคุณ</h3>
+        <h3 className="f-display font-bold text-2xl sm:text-3xl">สิ่งที่ควรรู้เกี่ยวกับตัวคุณ</h3>
       </div>
+      {group && (
+        <div className="flex flex-col gap-1 p-5 border" style={{ borderColor: group.color, background: "var(--panel)" }}>
+          <span className="text-sm" style={{ color: "var(--dim)" }}>ประเภทผู้เรียนของคุณ (จากพฤติกรรมในเกม)</span>
+          <span className="inline-flex items-center gap-2 f-display font-bold text-2xl" style={{ color: group.color }}><Icon name={group.icon} size={22} />{group.name}</span>
+          <p className="text-[15px] leading-relaxed">{group.strength} · <span style={{ color: "var(--amber)" }}>ควรพัฒนา:</span> {group.growth}</p>
+          <p className="text-[15px] leading-relaxed"><b>ลองอ่านหนังสือแบบนี้:</b> {group.study}</p>
+        </div>
+      )}
       <div className={"grid gap-3 " + (wide ? "grid-cols-2" : "grid-cols-1")}>
         {items.map((it) => (
           <div key={it.label} className="flex flex-col gap-2 p-5 border min-w-0" style={{ borderColor: "var(--line)", borderTop: "3px solid " + it.color, background: "var(--panel)" }}>
@@ -11917,7 +12003,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
 
           <motion.div key={tab} variants={tabStagger} initial="hidden" animate="show" className="flex flex-col gap-6" role="tabpanel">
           {tab === "student" ? (<>
-          <KeyTakeaways report={report} card={cardData} wide={wide} />
+          <KeyTakeaways report={report} card={cardData} wide={wide} group={learnerGroupOf({ lat: tm.hasData ? tm.avgLatency : null, sw: tm.totalSwitches, p: result.meters && result.meters.panic, h: result.meters && result.meters.health })} />
           <AIAnalysisSection result={result} char={char} type={type} tm={tm} wide={wide} />
           <motion.button variants={rise} id="sec-detail" onClick={() => { AUDIO.play("click"); setDetail((d) => !d); }} aria-expanded={detail}
             className="w-full flex items-center justify-between gap-3 p-4 border text-left" style={{ scrollMarginTop: 128, borderColor: "var(--line)", background: "var(--panel)" }}>
