@@ -3622,12 +3622,37 @@ function analyzeTelemetry(tele) {
 const MBTI_PAIRS = [["E", "I"], ["S", "N"], ["T", "F"], ["J", "P"]];
 const PAIR_LABEL = { EI: "พลังงาน", SN: "การรับรู้", TF: "การตัดสินใจ", JP: "การใช้ชีวิต" };
 const emptyScores = () => ({ E: 0, I: 0, S: 0, N: 0, T: 0, F: 0, J: 0, P: 0 });
-function computeMBTI(scores, baseType) {
+function computeMBTI(scores, baseType, history) {
   return MBTI_PAIRS.map(([a, b], i) => {
     if (scores[a] > scores[b]) return { letter: a, tie: false };
     if (scores[b] > scores[a]) return { letter: b, tie: false };
+    // เสมอ: ใช้คำตอบล่าสุดที่เกี่ยวกับมิตินี้ (ไม่ใช้บุคลิกของตัวละคร) · ไม่มีเลยค่อยใช้ค่าตั้งต้น
+    const last = (history || []).slice().reverse().find((h) => h.w && (h.w.includes(a) || h.w.includes(b)));
+    if (last) return { letter: last.w.includes(a) ? a : b, tie: true };
     return { letter: baseType[i], tie: true };
   });
+}
+/* ปรับคะแนนตามโอกาสที่ได้เลือก: คลังคำถามของแต่ละตัวละครมีตัวเลือกแต่ละมิติไม่เท่ากัน
+   (เช่น แว่นมีตัวเลือกฝั่ง T 19 ตัว แต่ F 7 ตัว) ถ้าไม่ปรับ ผู้เล่นที่สุ่มตอบก็จะได้ T เพราะตัวละคร
+   วิธี: ต่อคู่มิติ หักส่วนต่างที่ "คาดว่าจะได้ถ้าเลือกแบบสุ่ม" ออก โดยผลรวมของคู่นั้นเท่าเดิม */
+function balanceScores(scores, history, bank) {
+  if (!bank || !history || !history.length) return scores;
+  const exp = {}; "EISNTFJP".split("").forEach((l) => { exp[l] = 0; });
+  history.forEach((h) => {
+    const q = bank.find((x) => x.n === h.n); if (!q || !q.options || !q.options.length) return;
+    q.options.forEach((o) => (o.w || []).forEach((l) => { exp[l] += 1 / q.options.length; }));
+  });
+  const out = { ...scores };
+  MBTI_PAIRS.forEach(([a, b]) => {
+    const sa = scores[a] || 0, sb = scores[b] || 0;
+    if (!(sa + sb)) return;
+    const d = (exp[a] - exp[b]) / 2;
+    let na = sa - d, nb = sb + d;
+    if (na < 0) { nb += na; na = 0; }
+    if (nb < 0) { na += nb; nb = 0; }
+    out[a] = Math.round(na * 10) / 10; out[b] = Math.round(nb * 10) / 10;
+  });
+  return out;
 }
 const TYPE_NAMES = {
   ISTJ: "ผู้พิทักษ์ระบบ", ISFJ: "ผู้ดูแลเงียบ", INFJ: "ผู้มองการณ์ไกล", INTJ: "นักวางแผนกลยุทธ์",
@@ -5349,7 +5374,11 @@ function IntroScreen({ onDone, onBack, intro, narration, startLabel = "เริ
             );
           })}
         </div>
-        {/* ผู้ทำแบบทดสอบต้องดูอินโทรครบทุกฉาก (ไม่มีปุ่มข้าม) · เจ้าของ/ผู้แก้ไขใช้แถบ Editor ด้านล่างแทน */}
+        {/* ผู้เล่นข้ามบทนำได้ (เล่นซ้ำ/ลองสถานการณ์อื่นไม่ต้องรอ ~1.5 นาที) · ไปฉากสุดท้ายที่มีปุ่มเริ่มข้อ 1 */}
+        {!isLast && (
+          <button id="intro-skip" onClick={() => { AUDIO.play("click"); skip(); }}
+            className="tac cut px-3 py-1.5 text-sm inline-flex items-center gap-1.5"><Icon name="skip-forward" size={14} />ข้ามบทนำ</button>
+        )}
       </div>
 
       {editor && (
@@ -5664,7 +5693,7 @@ function SelectScreen({ device, onPick, onBack, picked }) {
                   <div className="p-3 border-l-2" style={{ background: "rgba(132,166,90,.1)", borderColor: "var(--green)" }}>
                     <p className="lbl inline-flex items-center gap-1" style={{ color: "var(--green)" }}><Icon name="shield-check" size={11} />จุดแข็ง</p>
                     <p className="text-sm leading-relaxed">{ch.strength}</p>
-                    <p className="f-mono text-[10px] mt-1" style={{ color: "var(--green)" }}>เน้นมิติ {ch.bonus}</p>
+                    
                   </div>
                   <div className="p-3 border-l-2" style={{ background: "rgba(229,55,44,.1)", borderColor: "var(--red)" }}>
                     <p className="lbl inline-flex items-center gap-1" style={{ color: "var(--red)" }}><Icon name="triangle-alert" size={11} />จุดอ่อน</p>
@@ -10606,7 +10635,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
                 <button id="item-close" aria-label="ปิด" className="p-1" style={{ color: "var(--dim)" }} onClick={() => setItemFocus(null)}><Icon name="x" size={14} /></button>
               </div>
               <p className="text-xs inline-flex items-center gap-1.5" style={{ color: match ? "var(--green)" : "var(--dim)" }}>
-                <Icon name={match ? "circle-check" : "circle-minus"} size={13} />{match ? "เข้ากับสถานการณ์นี้ · " + fxText(db.effect) : "ไม่ค่อยเข้ากับสถานการณ์นี้ ใช้ไปอาจไม่คุ้ม"}
+                <Icon name={match ? "circle-check" : "circle-minus"} size={13} />{match ? "เข้ากับสถานการณ์นี้" : "ไม่ค่อยเข้ากับสถานการณ์นี้ ใช้ไปอาจไม่คุ้ม"}
               </p>
               {canPick ? (
                 <div className="flex flex-wrap gap-2">
@@ -10617,7 +10646,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
                   {ally && (
                     <button id="item-gift" onClick={() => armItem(focusIt.id, "gift")} className="tac cut px-3 py-2 text-xs inline-flex items-center gap-1.5" title="ไอเทมชิ้นนี้จะหายจากเข็มขัดทั้งหมด"
                       style={on("gift") ? { background: "#d98fb0", color: "#111311", borderColor: "#d98fb0" } : { borderColor: "rgba(217,143,176,.6)" }}>
-                      <Icon name={on("gift") ? "check" : "hand-heart"} size={13} />{on("gift") ? "จะมอบให้" + ally : "มอบให้" + ally + " (" + fxText(GIFT_EFFECT) + ")"}
+                      <Icon name={on("gift") ? "check" : "hand-heart"} size={13} />{on("gift") ? "จะมอบให้" + ally : "มอบให้" + ally}
                     </button>
                   )}
                 </div>
@@ -10680,6 +10709,157 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     </div>
   );
 
+  /* แผงตอบ (ตัวเลือก/QTE/ด่านอันตราย/ทดสอบความจำ) · PC อยู่คอลัมน์ขวา เลือกได้โดยไม่ต้องเลื่อนจอ · มือถืออยู่ใต้ฉากเหมือนเดิม */
+  const actionArea = (<>
+          {phase === "hazard" && hazard ? (
+            <HazardPanel key={"haz" + qi} hz={hazard} left={hazLeft} inventory={inventory} allyReady={allyReady} wide={false} onPick={(pk) => resolveHazard(pk, hazard.start)} />
+          ) : phase === "qte" && qte ? (
+            <motion.section id="qte-panel" key={"qte" + qi} ref={(el) => { if (el && !el.__shown) { el.__shown = true; setTimeout(() => { try { el.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {} }, 350); } }}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-3 sm:p-4 flex flex-col gap-3 shrink-0"
+              style={{ borderColor: "var(--red)", background: "rgba(40,10,8,.9)", boxShadow: "0 0 30px -8px rgba(229,55,44,.8)" }}>
+              <div className="flex items-center gap-3">
+                <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--red)" }}><Icon name="siren" size={13} />Quick-time event · ตอบสนองภายใน {QTE_MS / 1000} วินาที</span>
+                <span className="ml-auto f-mono text-sm tabular-nums" style={{ color: qte.result ? "var(--dim)" : "var(--red)" }}>{qte.result ? (qte.result.rt != null ? qte.result.rt.toFixed(2) + "s" : "หมดเวลา") : (qteLeft / 1000).toFixed(1) + "s"}</span>
+              </div>
+              <div className="h-2.5" style={{ background: "#2a0d0b" }}>
+                <div className="h-full" style={{ width: (qte.result ? 0 : (qteLeft / QTE_MS) * 100) + "%", background: qteLeft < 1000 ? "#ff5a4a" : "var(--red)", transition: "width 50ms linear" }} />
+              </div>
+              <div className="grid gap-2 grid-cols-1">
+                {qteActions.map((a, i) => {
+                  const chosen = qte.result && qte.result.choice === a.id;
+                  return (
+                    <motion.button key={a.id} id={"qte-" + a.id} disabled={!a.ok || !!qte.result} onClick={() => resolveQte(a, qte.start)}
+                      whileTap={a.ok && !qte.result ? { scale: 0.96 } : {}}
+                      className="cut flex items-center gap-3 p-3 text-left min-w-0"
+                      style={{ background: chosen ? "var(--red)" : a.ok ? "#3a1512" : "#1d1716", color: chosen ? "#111311" : a.ok ? "var(--bone)" : "var(--dim)",
+                        border: "1px solid " + (chosen ? "var(--red)" : a.ok ? "rgba(229,55,44,.7)" : "var(--line)"), opacity: qte.result && !chosen ? 0.45 : 1, cursor: a.ok && !qte.result ? "pointer" : "not-allowed" }}>
+                      {wide && <span className="f-mono text-[11px] w-5 h-5 shrink-0 flex items-center justify-center" style={{ border: "1px solid currentColor" }}>{i + 1}</span>}
+                      <Icon name={a.ok ? a.icon : "lock"} size={22} />
+                      <span className="flex flex-col min-w-0">
+                        <span className="f-display font-bold leading-snug">{a.label}</span>
+                        <span className="text-[11px] leading-snug" style={{ opacity: 0.8 }}>
+                          {a.id === "item" ? (a.ok ? "ใช้" + a.itemName + " (เหลือ " + a.charges + ")" : "ไม่มี" + a.itemName + "แล้ว") : a.id === "skill" ? "ใช้จุดแข็งของ" + char.name : "ปลอดภัยไว้ก่อน แต่ทีมตื่นตระหนก"} · {fxText(a.fx)}
+                        </span>
+                      </span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px]" style={{ color: "var(--dim)" }}>ไม่ตอบภายใน {QTE_MS / 1000} วินาที = ทีมโดนจู่โจม ({fxText(QTE_TIMEOUT_FX)}) · ตอบช้ากว่า {QTE_LATE_S} วินาที = ทันแบบเฉียดฉิว (Health −3) · ส่วนนี้ไม่มีผลกับคะแนน MBTI</p>
+            </motion.section>
+          ) : phase === "probe" && probe ? (
+            <motion.section id="probe-panel" key={"probe" + qi} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-4 flex flex-col gap-3" style={{ borderColor: "var(--green)", background: "rgba(16,24,16,.92)", boxShadow: "0 0 26px -10px rgba(132,166,90,.7)" }}>
+              <div className="flex items-start gap-3">
+                <RadarBlip size={44} />
+                <div className="min-w-0 flex flex-col gap-0.5">
+                  <span className="lbl" style={{ color: "var(--green)" }}>Memory scan · ทดสอบความจำใช้งาน</span>
+                  <p className="f-display text-lg sm:text-xl leading-snug">{probe.prompt}</p>
+                  <p className="text-xs" style={{ color: "var(--dim)" }}>{probe.note}</p>
+                </div>
+              </div>
+              <div className="grid gap-2 grid-cols-1">
+                {probe.options.map((t, i) => {
+                  const ch = probe.chosen, right = ch && t === probe.answer, wrong = ch === t && t !== probe.answer;
+                  return (
+                    <button key={t} id={"probe-" + i} disabled={!!ch} onClick={() => answerProbe(t)} onMouseEnter={() => !ch && AUDIO.play("hover")}
+                      className="tac cut text-left p-3 flex gap-3 items-center min-w-0"
+                      style={right ? { borderColor: "var(--green)", color: "var(--green)" } : wrong ? { borderColor: "var(--red)", color: "var(--red)" } : ch ? { opacity: 0.4 } : {}}>
+                      <span className="f-mono text-xs w-6 h-6 shrink-0 flex items-center justify-center" style={{ background: "var(--panel-2)", border: "1px solid var(--line)" }}>{i + 1}</span>
+                      <span className="flex-1 min-w-0 text-sm sm:text-[15px]">{t}</span>
+                      {right && <Icon name="check" size={16} />}{wrong && <Icon name="x" size={16} />}
+                    </button>
+                  );
+                })}
+              </div>
+              {probe.chosen && (
+                <p className="text-sm" style={{ color: probe.chosen === probe.answer ? "var(--green)" : "var(--amber)" }}>
+                  {probe.chosen === probe.answer ? "ความจำแม่นมาก! ไปต่อกันเลย" : "ไม่เป็นไร คำตอบคือ “" + probe.answer + "” ไปต่อกัน"}
+                </p>
+              )}
+            </motion.section>
+          ) : (<>
+          <div className="relative">
+          {/* Micro-hint tooltip (Tactical Radar) */}
+          <AnimatePresence>
+            {hint && canPick && (
+              <motion.div key={hint.k} role="status" initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.3 }}
+                className={"relative mb-3 " + "flex items-center gap-3 p-2.5 pr-9 border text-sm"} style={{ borderColor: "rgba(132,166,90,.6)", background: "rgba(16,24,16,.94)", boxShadow: "0 0 22px -6px rgba(132,166,90,.55)" }}>
+                <RadarBlip />
+                <div className="min-w-0">
+                  <p className="lbl" style={{ color: "var(--green)" }}>Tactical radar · micro-hint</p>
+                  <p className="leading-snug">{hint.text}</p>
+                </div>
+                <button id="hint-close" aria-label="ปิดคำใบ้" className="absolute top-1.5 right-1.5 p-1" style={{ color: "var(--dim)" }} onClick={() => setHint(null)}><Icon name="x" size={14} /></button>
+                <span className="absolute -bottom-[7px] left-8 w-3 h-3 rotate-45" style={{ background: "rgba(16,24,16,.94)", borderRight: "1px solid rgba(132,166,90,.6)", borderBottom: "1px solid rgba(132,166,90,.6)" }} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {editor && (
+            <div id="editor-bar" className="flex items-center gap-1.5 flex-wrap px-2 py-1.5 mb-2 border" style={{ borderColor: "rgba(132,166,90,.45)", background: "rgba(132,166,90,.06)" }}>
+              <span className="lbl inline-flex items-center gap-1 mr-1" style={{ color: "var(--green)" }}><Icon name="clapperboard" size={12} />Editor · ไปข้อ</span>
+              {questions.map((_, i) => (
+                <button key={i} id={"edq-" + (i + 1)} onClick={() => { AUDIO.play("click"); edJump(i); }}
+                  className="f-mono text-xs w-8 h-7 inline-flex items-center justify-center border"
+                  style={i === qi && phase !== "interlude" ? { background: "var(--green)", color: "#111311", borderColor: "var(--green)" } : { borderColor: "var(--line)", color: "var(--bone)" }}>{i + 1}</button>
+              ))}
+              {(<>
+                <span className="lbl ml-2 mr-1" style={{ color: "var(--green)" }}>ฉากคั่นหลังข้อ</span>
+                {Object.keys(interludesFor()).map((k) => +k).map((k) => (
+                  <button key={"il" + k} id={"edi-" + (k + 1)} onClick={() => { AUDIO.play("click"); edInterlude(k); }}
+                    className="f-mono text-xs w-8 h-7 inline-flex items-center justify-center border"
+                    style={interlude && interlude.k === k ? { background: "var(--amber)", color: "#111311", borderColor: "var(--amber)" } : { borderColor: "var(--line)", color: "var(--bone)" }}>{k + 1}</button>
+                ))}
+              </>)}
+              <span className="ml-auto inline-flex gap-1.5">
+                {phase === "interlude"
+                  ? <button id="ed-skipil" onClick={() => { AUDIO.play("click"); edSkipInterlude(); }} className="text-xs inline-flex items-center gap-1 px-2.5 h-7 border" style={{ borderColor: "var(--line)" }}>ข้ามฉากคั่น <Icon name="skip-forward" size={12} /></button>
+                  : <button id="ed-skip" onClick={() => { AUDIO.play("click"); edSkip(); }} className="text-xs inline-flex items-center gap-1 px-2.5 h-7 border" style={{ borderColor: "var(--line)" }}>{qi < questions.length - 1 ? "ข้ามข้อนี้" : "ไปหน้าผลลัพธ์"} <Icon name="skip-forward" size={12} /></button>}
+                <button id="ed-tour" onClick={() => { AUDIO.play("click"); setTour(0); }} className="text-xs inline-flex items-center gap-1 px-2.5 h-7 border" style={{ borderColor: "var(--line)" }}>ดูวิธีเล่น <Icon name="circle-help" size={12} /></button>
+                <button id="ed-finish" onClick={() => { AUDIO.play("click"); edFinish(); }} className="text-xs inline-flex items-center gap-1 px-2.5 h-7 border" style={{ borderColor: "var(--line)" }}>ไปหน้าผลลัพธ์ <Icon name="flag" size={12} /></button>
+              </span>
+            </div>
+          )}
+          {/* Action panel */}
+          <motion.div id="options-grid" className="grid gap-2 grid-cols-1" style={phase === "interlude" ? { visibility: "hidden" } : undefined}
+            animate={meters.panic >= 70 && pickable ? { x: [0, -1.5, 1.5, -1, 1, 0], rotate: [0, -0.15, 0.15, 0] } : { x: 0, rotate: 0 }}
+            transition={meters.panic >= 70 && pickable ? { duration: 0.5, repeat: Infinity, repeatDelay: 1.6 } : { duration: 0.2 }}>
+            {q.options.map((o, i) => {
+              const isPicked = picked ? picked.key === o.key : !!(sel && sel.key === o.key);
+              const syn = canPick ? synergyFor(o, inventory) : null;
+              return (
+                <motion.button key={qi + o.key} id={"opt-" + o.key} disabled={!canPick} onClick={() => selectOpt(o)}
+                  onMouseEnter={() => hoverOpt(o)} aria-pressed={!!isPicked}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: !showOptions ? 0.25 : picked && !isPicked ? 0.3 : 1, y: 0 }}
+                  transition={{ delay: canPick && !picked ? i * 0.1 : 0, duration: 0.35 }}
+                  className="tac cut flex items-start gap-3 text-left p-3 sm:p-4 min-w-0"
+                  style={isPicked ? { borderColor: "var(--amber)", boxShadow: "0 0 0 1px var(--amber), 0 0 24px -4px rgba(242,163,58,.7)" } : { cursor: canPick ? "pointer" : "default" }}>
+                  <span className="f-display font-bold shrink-0 w-8 h-8 flex items-center justify-center text-sm"
+                    style={{ background: isPicked ? "var(--amber)" : "var(--panel-2)", color: isPicked ? "#111311" : "var(--green)", border: "1px solid var(--line)" }}>{o.key}</span>
+                  <span className="pt-1 min-w-0 flex flex-col items-start gap-1.5">
+                    <span className="text-sm sm:text-[15px] leading-snug">{o.text}</span>
+                    {/* ไม่บอกผลของตัวเลือกล่วงหน้า (เคยแสดง "ปลดล็อกโบนัส · Infection −4") · โบนัสจะเผยหลังยืนยันคำตอบ */}
+                  </span>
+                </motion.button>
+              );
+            })}
+          </motion.div>
+          </div>
+          {canPick && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <motion.button id="confirm-answer" disabled={!sel} onClick={() => confirmPick()}
+                whileHover={sel ? { y: -2 } : {}} whileTap={sel ? { scale: 0.97 } : {}}
+                className="cut f-display font-semibold uppercase tracking-wider inline-flex items-center justify-center gap-2 px-6 py-3"
+                style={sel ? { background: "var(--green)", color: "#111311", boxShadow: "0 0 26px -6px var(--green)" } : { background: "var(--panel-2)", color: "var(--dim)", cursor: "not-allowed", border: "1px dashed var(--line)" }}>
+                <Icon name="check-check" size={18} />{sel ? "ยืนยันคำตอบ " + sel.key : "เลือกตัวเลือกก่อน"}
+                {sel && armed && <span className="normal-case tracking-normal text-xs font-normal inline-flex items-center gap-1">+ <Icon name={(inventory.find((x) => x.id === armed.id) || {}).icon} size={13} />{armed.mode === "gift" ? "มอบ" : "ใช้"}</span>}
+              </motion.button>
+              <span className="text-xs" style={{ color: "var(--dim)" }}>แตะเพื่อเลือก แตะซ้ำหรือกดยืนยันเพื่อส่งคำตอบ · แตะไอเทมบนเข็มขัดเพื่อใช้ร่วมกับคำตอบ</span>
+            </div>
+          )}
+          </>)}
+  </>);
   const tourEl = tour !== null && (
     <TourOverlay step={tour} steps={tourSteps_} wide={wide}
       onNext={() => { AUDIO.play("click"); tour >= tourSteps_.length - 1 ? endTour() : setTour(tour + 1); }}
@@ -10699,21 +10879,8 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
           <span className="f-display font-bold" style={{ color: char.color }}>{char.name}</span>
         </span>
         <span className="f-mono text-xs tabular-nums px-2 py-0.5" style={{ background: "var(--panel-2)" }}>ข้อ {qi + 1}/{questions.length}</span>
-        <div className="flex gap-2 sm:gap-3 flex-1 min-w-0 flex-wrap" aria-label="คะแนน MBTI สด">
-          {MBTI_PAIRS.map(([a, b]) => {
-            const total = scores[a] + scores[b];
-            const pct = total ? (scores[a] / total) * 100 : 50;
-            return (
-              <div key={a} className="flex items-center gap-1 f-mono text-[11px] tabular-nums">
-                <span style={{ color: scores[a] >= scores[b] ? "var(--bone)" : "var(--dim)" }}>{a}{scores[a]}</span>
-                <div className="w-8 sm:w-12 h-1 overflow-hidden" style={{ background: "rgba(229,55,44,.4)" }}>
-                  <motion.div className="h-full" style={{ background: "var(--green)" }} animate={{ width: pct + "%" }} />
-                </div>
-                <span style={{ color: scores[b] > scores[a] ? "var(--bone)" : "var(--dim)" }}>{scores[b]}{b}</span>
-              </div>
-            );
-          })}
-        </div>
+        {/* ไม่แสดงคะแนน MBTI ระหว่างเล่น (ผู้เล่นจะเลือกตอบเพื่อให้ได้ผลที่อยากได้) · เผยที่หน้าผลลัพธ์เท่านั้น */}
+        <div className="flex-1" />
         <span className="f-mono text-[10px] inline-flex items-center gap-1.5" style={{ color: "var(--dim)" }} title="บันทึกเวลาและการสลับตัวเลือก เพื่อใช้ในรายงานผลการเรียนรู้">
           <motion.span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--red)" }} animate={{ opacity: [1, 0.2, 1] }} transition={{ duration: 1.6, repeat: Infinity }} />TELEMETRY
         </span>
@@ -10721,10 +10888,10 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
         <button id="mute-toggle" onClick={onToggleMute} aria-label={muted ? "เปิดเสียง" : "ปิดเสียง"} className="p-1.5 border" style={{ borderColor: "var(--line)" }}><Icon name={muted ? "volume-x" : "volume-2"} size={16} /></button>
       </header>
 
-      <div className={"flex-1 min-h-0 grid gap-3 " + (wide ? "grid-cols-[minmax(0,1fr)_280px]" : "grid-cols-1 overflow-y-auto scroll-thin")}>
+      <div className={"flex-1 min-h-0 grid gap-3 " + (wide ? "grid-cols-[minmax(0,1fr)_minmax(340px,420px)]" : "grid-cols-1 overflow-y-auto scroll-thin")}>
         <div className={"game-col flex flex-col gap-3 min-w-0 " + (wide ? "min-h-0 overflow-y-auto scroll-thin pr-1" : "")}>
           {/* Main display 16:9 */}
-          <motion.div id="scene-box" animate={shakeCtl} className="relative overflow-hidden border mx-auto shrink-0" style={{ aspectRatio: "16 / 9", width: wide ? "min(100%, calc((100vh - 500px) * 16 / 9))" : "100%", minWidth: wide ? 480 : 0, maxWidth: "100%", borderColor: "var(--line)", background: "#050605" }}>
+          <motion.div id="scene-box" animate={shakeCtl} className="relative overflow-hidden border mx-auto shrink-0" style={{ aspectRatio: "16 / 9", width: wide ? "min(100%, calc((100vh - 360px) * 16 / 9))" : "100%", minWidth: wide ? 420 : 0, maxWidth: "100%", borderColor: "var(--line)", background: "#050605" }}>
             <div key={glitchKey} className={"absolute inset-0 " + (glitchKey ? "glitch" : "")}>
               <AnimatePresence mode="wait">
                 <motion.div key={qi} className="absolute inset-0"
@@ -10791,158 +10958,12 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
           {Belt}
           {phase !== "probe" && phase !== "qte" && phase !== "hazard" && Dialogue}
 
-          {phase === "hazard" && hazard ? (
-            <HazardPanel key={"haz" + qi} hz={hazard} left={hazLeft} inventory={inventory} allyReady={allyReady} wide={wide} onPick={(pk) => resolveHazard(pk, hazard.start)} />
-          ) : phase === "qte" && qte ? (
-            <motion.section id="qte-panel" key={"qte" + qi} ref={(el) => { if (el && !el.__shown) { el.__shown = true; setTimeout(() => { try { el.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) {} }, 350); } }}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-3 sm:p-4 flex flex-col gap-3 shrink-0"
-              style={{ borderColor: "var(--red)", background: "rgba(40,10,8,.9)", boxShadow: "0 0 30px -8px rgba(229,55,44,.8)" }}>
-              <div className="flex items-center gap-3">
-                <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--red)" }}><Icon name="siren" size={13} />Quick-time event · ตอบสนองภายใน {QTE_MS / 1000} วินาที</span>
-                <span className="ml-auto f-mono text-sm tabular-nums" style={{ color: qte.result ? "var(--dim)" : "var(--red)" }}>{qte.result ? (qte.result.rt != null ? qte.result.rt.toFixed(2) + "s" : "หมดเวลา") : (qteLeft / 1000).toFixed(1) + "s"}</span>
-              </div>
-              <div className="h-2.5" style={{ background: "#2a0d0b" }}>
-                <div className="h-full" style={{ width: (qte.result ? 0 : (qteLeft / QTE_MS) * 100) + "%", background: qteLeft < 1000 ? "#ff5a4a" : "var(--red)", transition: "width 50ms linear" }} />
-              </div>
-              <div className={"grid gap-2 " + (wide ? "grid-cols-3" : "grid-cols-1")}>
-                {qteActions.map((a, i) => {
-                  const chosen = qte.result && qte.result.choice === a.id;
-                  return (
-                    <motion.button key={a.id} id={"qte-" + a.id} disabled={!a.ok || !!qte.result} onClick={() => resolveQte(a, qte.start)}
-                      whileTap={a.ok && !qte.result ? { scale: 0.96 } : {}}
-                      className="cut flex items-center gap-3 p-3 text-left min-w-0"
-                      style={{ background: chosen ? "var(--red)" : a.ok ? "#3a1512" : "#1d1716", color: chosen ? "#111311" : a.ok ? "var(--bone)" : "var(--dim)",
-                        border: "1px solid " + (chosen ? "var(--red)" : a.ok ? "rgba(229,55,44,.7)" : "var(--line)"), opacity: qte.result && !chosen ? 0.45 : 1, cursor: a.ok && !qte.result ? "pointer" : "not-allowed" }}>
-                      {wide && <span className="f-mono text-[11px] w-5 h-5 shrink-0 flex items-center justify-center" style={{ border: "1px solid currentColor" }}>{i + 1}</span>}
-                      <Icon name={a.ok ? a.icon : "lock"} size={22} />
-                      <span className="flex flex-col min-w-0">
-                        <span className="f-display font-bold leading-snug">{a.label}</span>
-                        <span className="text-[11px] leading-snug" style={{ opacity: 0.8 }}>
-                          {a.id === "item" ? (a.ok ? "ใช้" + a.itemName + " (เหลือ " + a.charges + ")" : "ไม่มี" + a.itemName + "แล้ว") : a.id === "skill" ? "ใช้จุดแข็งของ" + char.name : "ปลอดภัยไว้ก่อน แต่ทีมตื่นตระหนก"} · {fxText(a.fx)}
-                        </span>
-                      </span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-              <p className="text-[11px]" style={{ color: "var(--dim)" }}>ไม่ตอบภายใน {QTE_MS / 1000} วินาที = ทีมโดนจู่โจม ({fxText(QTE_TIMEOUT_FX)}) · ตอบช้ากว่า {QTE_LATE_S} วินาที = ทันแบบเฉียดฉิว (Health −3) · ส่วนนี้ไม่มีผลกับคะแนน MBTI</p>
-            </motion.section>
-          ) : phase === "probe" && probe ? (
-            <motion.section id="probe-panel" key={"probe" + qi} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-4 flex flex-col gap-3" style={{ borderColor: "var(--green)", background: "rgba(16,24,16,.92)", boxShadow: "0 0 26px -10px rgba(132,166,90,.7)" }}>
-              <div className="flex items-start gap-3">
-                <RadarBlip size={44} />
-                <div className="min-w-0 flex flex-col gap-0.5">
-                  <span className="lbl" style={{ color: "var(--green)" }}>Memory scan · ทดสอบความจำใช้งาน</span>
-                  <p className="f-display text-lg sm:text-xl leading-snug">{probe.prompt}</p>
-                  <p className="text-xs" style={{ color: "var(--dim)" }}>{probe.note}</p>
-                </div>
-              </div>
-              <div className={"grid gap-2 " + (wide ? "grid-cols-2" : "grid-cols-1")}>
-                {probe.options.map((t, i) => {
-                  const ch = probe.chosen, right = ch && t === probe.answer, wrong = ch === t && t !== probe.answer;
-                  return (
-                    <button key={t} id={"probe-" + i} disabled={!!ch} onClick={() => answerProbe(t)} onMouseEnter={() => !ch && AUDIO.play("hover")}
-                      className="tac cut text-left p-3 flex gap-3 items-center min-w-0"
-                      style={right ? { borderColor: "var(--green)", color: "var(--green)" } : wrong ? { borderColor: "var(--red)", color: "var(--red)" } : ch ? { opacity: 0.4 } : {}}>
-                      <span className="f-mono text-xs w-6 h-6 shrink-0 flex items-center justify-center" style={{ background: "var(--panel-2)", border: "1px solid var(--line)" }}>{i + 1}</span>
-                      <span className="flex-1 min-w-0 text-sm sm:text-[15px]">{t}</span>
-                      {right && <Icon name="check" size={16} />}{wrong && <Icon name="x" size={16} />}
-                    </button>
-                  );
-                })}
-              </div>
-              {probe.chosen && (
-                <p className="text-sm" style={{ color: probe.chosen === probe.answer ? "var(--green)" : "var(--amber)" }}>
-                  {probe.chosen === probe.answer ? "ความจำแม่นมาก! ไปต่อกันเลย" : "ไม่เป็นไร คำตอบคือ “" + probe.answer + "” ไปต่อกัน"}
-                </p>
-              )}
-            </motion.section>
-          ) : (<>
-          <div className="relative">
-          {/* Micro-hint tooltip (Tactical Radar) */}
-          <AnimatePresence>
-            {hint && canPick && (
-              <motion.div key={hint.k} role="status" initial={{ opacity: 0, y: 6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: 0.3 }}
-                className={(wide ? "absolute bottom-full mb-3 left-0 z-20 max-w-xl " : "relative mb-3 ") + "flex items-center gap-3 p-2.5 pr-9 border text-sm"} style={{ borderColor: "rgba(132,166,90,.6)", background: "rgba(16,24,16,.94)", boxShadow: "0 0 22px -6px rgba(132,166,90,.55)" }}>
-                <RadarBlip />
-                <div className="min-w-0">
-                  <p className="lbl" style={{ color: "var(--green)" }}>Tactical radar · micro-hint</p>
-                  <p className="leading-snug">{hint.text}</p>
-                </div>
-                <button id="hint-close" aria-label="ปิดคำใบ้" className="absolute top-1.5 right-1.5 p-1" style={{ color: "var(--dim)" }} onClick={() => setHint(null)}><Icon name="x" size={14} /></button>
-                <span className="absolute -bottom-[7px] left-8 w-3 h-3 rotate-45" style={{ background: "rgba(16,24,16,.94)", borderRight: "1px solid rgba(132,166,90,.6)", borderBottom: "1px solid rgba(132,166,90,.6)" }} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {editor && (
-            <div id="editor-bar" className="flex items-center gap-1.5 flex-wrap px-2 py-1.5 mb-2 border" style={{ borderColor: "rgba(132,166,90,.45)", background: "rgba(132,166,90,.06)" }}>
-              <span className="lbl inline-flex items-center gap-1 mr-1" style={{ color: "var(--green)" }}><Icon name="clapperboard" size={12} />Editor · ไปข้อ</span>
-              {questions.map((_, i) => (
-                <button key={i} id={"edq-" + (i + 1)} onClick={() => { AUDIO.play("click"); edJump(i); }}
-                  className="f-mono text-xs w-8 h-7 inline-flex items-center justify-center border"
-                  style={i === qi && phase !== "interlude" ? { background: "var(--green)", color: "#111311", borderColor: "var(--green)" } : { borderColor: "var(--line)", color: "var(--bone)" }}>{i + 1}</button>
-              ))}
-              {(<>
-                <span className="lbl ml-2 mr-1" style={{ color: "var(--green)" }}>ฉากคั่นหลังข้อ</span>
-                {Object.keys(interludesFor()).map((k) => +k).map((k) => (
-                  <button key={"il" + k} id={"edi-" + (k + 1)} onClick={() => { AUDIO.play("click"); edInterlude(k); }}
-                    className="f-mono text-xs w-8 h-7 inline-flex items-center justify-center border"
-                    style={interlude && interlude.k === k ? { background: "var(--amber)", color: "#111311", borderColor: "var(--amber)" } : { borderColor: "var(--line)", color: "var(--bone)" }}>{k + 1}</button>
-                ))}
-              </>)}
-              <span className="ml-auto inline-flex gap-1.5">
-                {phase === "interlude"
-                  ? <button id="ed-skipil" onClick={() => { AUDIO.play("click"); edSkipInterlude(); }} className="text-xs inline-flex items-center gap-1 px-2.5 h-7 border" style={{ borderColor: "var(--line)" }}>ข้ามฉากคั่น <Icon name="skip-forward" size={12} /></button>
-                  : <button id="ed-skip" onClick={() => { AUDIO.play("click"); edSkip(); }} className="text-xs inline-flex items-center gap-1 px-2.5 h-7 border" style={{ borderColor: "var(--line)" }}>{qi < questions.length - 1 ? "ข้ามข้อนี้" : "ไปหน้าผลลัพธ์"} <Icon name="skip-forward" size={12} /></button>}
-                <button id="ed-tour" onClick={() => { AUDIO.play("click"); setTour(0); }} className="text-xs inline-flex items-center gap-1 px-2.5 h-7 border" style={{ borderColor: "var(--line)" }}>ดูวิธีเล่น <Icon name="circle-help" size={12} /></button>
-                <button id="ed-finish" onClick={() => { AUDIO.play("click"); edFinish(); }} className="text-xs inline-flex items-center gap-1 px-2.5 h-7 border" style={{ borderColor: "var(--line)" }}>ไปหน้าผลลัพธ์ <Icon name="flag" size={12} /></button>
-              </span>
-            </div>
-          )}
-          {/* Action panel */}
-          <motion.div id="options-grid" className={"grid gap-2 " + (wide ? "grid-cols-2" : "grid-cols-1")} style={phase === "interlude" ? { visibility: "hidden" } : undefined}
-            animate={meters.panic >= 70 && pickable ? { x: [0, -1.5, 1.5, -1, 1, 0], rotate: [0, -0.15, 0.15, 0] } : { x: 0, rotate: 0 }}
-            transition={meters.panic >= 70 && pickable ? { duration: 0.5, repeat: Infinity, repeatDelay: 1.6 } : { duration: 0.2 }}>
-            {q.options.map((o, i) => {
-              const isPicked = picked ? picked.key === o.key : !!(sel && sel.key === o.key);
-              const syn = canPick ? synergyFor(o, inventory) : null;
-              return (
-                <motion.button key={qi + o.key} id={"opt-" + o.key} disabled={!canPick} onClick={() => selectOpt(o)}
-                  onMouseEnter={() => hoverOpt(o)} aria-pressed={!!isPicked}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: !showOptions ? 0.25 : picked && !isPicked ? 0.3 : 1, y: 0 }}
-                  transition={{ delay: canPick && !picked ? i * 0.1 : 0, duration: 0.35 }}
-                  className="tac cut flex items-start gap-3 text-left p-3 sm:p-4 min-w-0"
-                  style={isPicked ? { borderColor: "var(--amber)", boxShadow: "0 0 0 1px var(--amber), 0 0 24px -4px rgba(242,163,58,.7)" } : { cursor: canPick ? "pointer" : "default" }}>
-                  <span className="f-display font-bold shrink-0 w-8 h-8 flex items-center justify-center text-sm"
-                    style={{ background: isPicked ? "var(--amber)" : "var(--panel-2)", color: isPicked ? "#111311" : "var(--green)", border: "1px solid var(--line)" }}>{o.key}</span>
-                  <span className="pt-1 min-w-0 flex flex-col items-start gap-1.5">
-                    <span className="text-sm sm:text-[15px] leading-snug">{o.text}</span>
-                    {syn && <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 border" style={{ borderColor: "var(--green)", color: "var(--green)" }}><Icon name="lock-open" size={11} />ปลดล็อกโบนัสด้วย{syn.name} · {fxText(fxHalf(ITEM_DB[syn.id].effect))}</span>}
-                  </span>
-                </motion.button>
-              );
-            })}
-          </motion.div>
-          </div>
-          {canPick && (
-            <div className="flex items-center gap-3 flex-wrap">
-              <motion.button id="confirm-answer" disabled={!sel} onClick={() => confirmPick()}
-                whileHover={sel ? { y: -2 } : {}} whileTap={sel ? { scale: 0.97 } : {}}
-                className="cut f-display font-semibold uppercase tracking-wider inline-flex items-center justify-center gap-2 px-6 py-3"
-                style={sel ? { background: "var(--green)", color: "#111311", boxShadow: "0 0 26px -6px var(--green)" } : { background: "var(--panel-2)", color: "var(--dim)", cursor: "not-allowed", border: "1px dashed var(--line)" }}>
-                <Icon name="check-check" size={18} />{sel ? "ยืนยันคำตอบ " + sel.key : "เลือกตัวเลือกก่อน"}
-                {sel && armed && <span className="normal-case tracking-normal text-xs font-normal inline-flex items-center gap-1">+ <Icon name={(inventory.find((x) => x.id === armed.id) || {}).icon} size={13} />{armed.mode === "gift" ? "มอบ" : "ใช้"}</span>}
-              </motion.button>
-              <span className="text-xs" style={{ color: "var(--dim)" }}>แตะเพื่อเลือก แตะซ้ำหรือกดยืนยันเพื่อส่งคำตอบ · แตะไอเทมบนเข็มขัดเพื่อใช้ร่วมกับคำตอบ</span>
-            </div>
-          )}
-          </>)}
+          {!wide && actionArea}
         </div>
 
         {/* Side rail: squad + inventory */}
-        <aside className="flex flex-col gap-3 min-w-0">
+        <aside className={"flex flex-col gap-3 min-w-0 " + (wide ? "min-h-0 overflow-y-auto scroll-thin pr-1" : "")}>
+          {wide && <div id="action-col" className="flex flex-col gap-3">{actionArea}</div>}
           <section id="squad-panel" className="border p-3 flex flex-col gap-3" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
             <span className="lbl inline-flex items-center gap-1.5"><Icon name="activity" size={12} />Squad condition</span>
             <Meter label="Health" icon="heart-pulse" value={meters.health} color="var(--green)" delta={deltas.health} life={METER_LIFE.health} />
@@ -11880,7 +11901,7 @@ function FeedbackBox({ meta }) {
 function ResultScreen({ device, charId, result, onRestart }) {
   const char = charById(charId);
   const wide = device === "pc";
-  const letters = computeMBTI(result.scores, char.baseType);
+  const letters = computeMBTI(result.scores, char.baseType, result.history);
   const type = letters.map((l) => l.letter).join("");
   const report = buildReport(type, result.meters);
   const art = MEDIA_ASSETS.resultArt[charId + "_" + type];
@@ -12013,7 +12034,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
               </motion.div>
               {cardOpen && <ResultCardModal data={cardData} onClose={() => setCardOpen(false)} onName={(nmv) => { if (result.sid && nmv) STORE.saveSession({ sid: result.sid, playerName: nmv, code: cardData.code }); }} />}
               {letters.some((l) => l.tie) && (
-                <motion.p variants={rise} className="text-xs" style={{ color: "var(--dim)" }}>ตัวอักษรขีดเส้นจุด = คะแนนเสมอกัน ใช้บุคลิกตั้งต้นของ{char.name} ({char.baseType}) ตัดสิน</motion.p>
+                <motion.p variants={rise} className="text-xs" style={{ color: "var(--dim)" }}>ตัวอักษรขีดเส้นจุด = คะแนนสองฝั่งเท่ากัน ใช้คำตอบล่าสุดของคุณในมิตินั้นตัดสิน</motion.p>
               )}
             </div>
           </div>
@@ -12523,9 +12544,11 @@ function App() {
     setScenario(id); setScreen("select");
     if (profile) STORE.saveSession({ sid: profile.sid, scenario: id });
   };
-  const finishGame = (r) => {
+  const finishGame = (r0) => {
     const ch0 = charById(charId);
-    const type0 = computeMBTI(r.scores, ch0.baseType).map((l) => l.letter).join("");
+    let r = r0;
+    try { r = { ...r0, rawScores: r0.scores, scores: balanceScores(r0.scores, r0.history, bankFor(charId)) }; } catch (e) {}
+    const type0 = computeMBTI(r.scores, ch0.baseType, r.history).map((l) => l.letter).join("");
     let code = "";
     try { code = verifyCode(profile && profile.sid, type0, r.scores, analyzeTelemetry(r.telemetry).ef); } catch (e) {}
     setResult({ ...r, code, sid: profile && profile.sid }); setScreen("ending");
