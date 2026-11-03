@@ -79,7 +79,7 @@ export default {
 
     // ---- ห้องอาจารย์: เก็บและดูผลของนักศึกษา ----
     if (body && (body.mode === "login" || body.mode === "verify")) return editorAuth(body, env, cors);
-    if (body && ["save", "list", "get", "feedback", "feedback_list"].includes(body.mode)) return teacherApi(body, env, cors);
+    if (body && ["save", "list", "get", "feedback", "feedback_list", "room_info", "room_create", "room_list", "room_delete"].includes(body.mode)) return teacherApi(body, env, cors);
 
     if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
     const player = sanitize(body && body.player);
@@ -266,6 +266,7 @@ function cleanSession(s) {
   put("code", tStr(s.code, 40));
   put("startedAt", tNum(s.startedAt));
   put("finishedAt", tNum(s.finishedAt));
+  put("room", roomCode(s.room));   // ห้องเรียนที่อาจารย์สร้าง (ลิงก์ ?room=) · ไม่มี = เว็บกลาง
   put("reached", Number.isInteger(s.reached) && s.reached >= 1 && s.reached <= 10 ? s.reached : undefined);
   // ผลการเล่นเต็ม (คะแนน สภาพทีม พฤติกรรม) สำหรับเปิดหน้าผลลัพธ์ย้อนหลัง
   if (s.result && typeof s.result === "object") {
@@ -274,11 +275,15 @@ function cleanSession(s) {
   }
   return out;
 }
+// รหัสห้อง 6 ตัว (ตัดตัวที่สับสนง่าย เช่น O/0 I/1 ออก)
+const ROOM_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function roomCode(v) { const c = String(v || "").trim().toUpperCase(); return /^[A-Z0-9]{6}$/.test(c) ? c : undefined; }
+function newRoomCode() { const b = crypto.getRandomValues(new Uint8Array(6)); return Array.from(b, (x) => ROOM_CHARS[x % ROOM_CHARS.length]).join(""); }
 function metaOf(r) {
   const tm = (r.result && r.result.summary) || {};
   return { t: r.finishedAt || r.startedAt || 0, sc: r.scenario, ch: r.character, mb: r.mbti, g: r.gender, a: r.age, n: r.playerName ? r.playerName.slice(0, 30) : undefined,
     lat: tNum(tm.avgLatency), sw: tNum(tm.totalSwitches), wm: tNum(tm.ef && tm.ef.wm), ic: tNum(tm.ef && tm.ef.ic), cf: tNum(tm.ef && tm.ef.cf),
-    h: tNum(r.result && r.result.meters && r.result.meters.health), p: tNum(r.result && r.result.meters && r.result.meters.panic), q: r.reached, done: !!r.finishedAt };
+    h: tNum(r.result && r.result.meters && r.result.meters.health), p: tNum(r.result && r.result.meters && r.result.meters.panic), q: r.reached, rm: r.room, done: !!r.finishedAt };
 }
 async function teacherApi(body, env, cors) {
   if (!env.SESSIONS) return json({ ok: false, error: "kv_missing" }, 503, cors);
@@ -300,16 +305,50 @@ async function teacherApi(body, env, cors) {
     if (!(rating >= 1 && rating <= 5) && !text.trim() && !tags.length) return json({ ok: false, error: "empty_feedback" }, 400, cors);
     const rec = { t: Date.now(), rating: rating >= 1 && rating <= 5 ? rating : undefined, text: text.trim() || undefined, tags,
       sid: tStr(f.sid, 40), scenario: ["zombie", "forest", "disaster"].includes(f.scenario) ? f.scenario : undefined,
-      mbti: /^[EI][SN][TF][JP]$/.test(f.mbti || "") ? f.mbti : undefined, device: tStr(f.device, 10), where: tStr(f.where, 20) };
+      mbti: /^[EI][SN][TF][JP]$/.test(f.mbti || "") ? f.mbti : undefined, device: tStr(f.device, 10), where: tStr(f.where, 20), room: roomCode(f.room) };
     const key = "f:" + String(rec.t).padStart(14, "0") + ":" + Math.random().toString(36).slice(2, 8);
     await env.SESSIONS.put(key, JSON.stringify(rec), { expirationTtl: SESSION_TTL });
     return json({ ok: true }, 200, cors);
+  }
+  // ข้อมูลห้อง (สาธารณะ): บอกแค่ชื่อห้อง ให้ผู้เล่นเห็นว่ากำลังเล่นในห้องไหน
+  if (body.mode === "room_info") {
+    const code = roomCode(body.code);
+    const rec = code ? await env.SESSIONS.get("r:" + code, "json") : null;
+    return rec ? json({ ok: true, code, name: rec.name }, 200, cors) : json({ ok: false, error: "room_not_found" }, 404, cors);
   }
   // เข้าได้ 2 ทาง: เข้าสู่ระบบทีม (token) หรือรหัสอาจารย์ (TEACHER_KEY)
   const byToken = body.token ? await verifyToken(String(body.token), env) : null;
   if (!byToken) {
     if (!env.TEACHER_KEY) return json({ ok: false, error: body.token ? "session_expired" : "teacher_key_missing" }, body.token ? 401 : 503, cors);
     if (!sameKey(String(body.key || ""), env.TEACHER_KEY)) { await sleep(500); return json({ ok: false, error: body.token && !body.key ? "session_expired" : "wrong_key" }, 401, cors); }
+  }
+  if (body.mode === "room_create") {
+    const name = (tStr(body.name, 60) || "").trim();
+    if (!name) return json({ ok: false, error: "room_name" }, 400, cors);
+    let code = "";
+    for (let i = 0; i < 6 && !code; i++) { const c = newRoomCode(); if (!(await env.SESSIONS.get("r:" + c))) code = c; }
+    if (!code) return json({ ok: false, error: "room_busy" }, 503, cors);
+    const rec = { code, name, owner: byToken ? byToken.u : "teacher", t: Date.now() };
+    await env.SESSIONS.put("r:" + code, JSON.stringify(rec), { metadata: rec });
+    return json({ ok: true, room: rec }, 200, cors);
+  }
+  if (body.mode === "room_list") {
+    const rooms = [];
+    let c;
+    do {
+      const page = await env.SESSIONS.list({ prefix: "r:", cursor: c, limit: 1000 });
+      page.keys.forEach((k) => rooms.push(k.metadata || { code: k.name.slice(2) }));
+      c = page.list_complete ? undefined : page.cursor;
+    } while (c && rooms.length < 2000);
+    rooms.sort((a, b) => (b.t || 0) - (a.t || 0));
+    return json({ ok: true, rooms }, 200, cors);
+  }
+  if (body.mode === "room_delete") {
+    // ลบเฉพาะห้อง (ลิงก์ใช้ไม่ได้อีก) · ผลที่เล่นไปแล้วยังอยู่และยังกรองดูด้วยรหัสห้องได้
+    const code = roomCode(body.code);
+    if (!code) return json({ ok: false, error: "room_not_found" }, 404, cors);
+    await env.SESSIONS.delete("r:" + code);
+    return json({ ok: true }, 200, cors);
   }
   if (body.mode === "get") {
     const sid = tStr(body.sid, 40);
