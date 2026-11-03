@@ -4739,13 +4739,14 @@ function StudentResults({ onOpen }) {
           <Stat label="สถานการณ์ที่เล่น" value={Object.keys(scenCount).length ? Object.entries(scenCount).map(([k, v]) => SCEN_TH[k] + " " + v).join(" · ") : "–"} />
         </div>
         {(() => {
-          const nd = (rows || []).filter((x) => !x.done);
-          if (!nd.length) return null;
+          const TRACK_FROM = Date.UTC(2026, 10, 3, 8, 20);   // เริ่มบันทึกความคืบหน้า 3 พ.ย. 2569 15:20 น. · ก่อนหน้านี้ไม่รู้ว่าหยุดตรงไหน
+          const ndAll = (rows || []).filter((x) => !x.done), nd = ndAll.filter((x) => (x.t || 0) >= TRACK_FROM);
+          if (!ndAll.length) return null;
           const b = [["ก่อนเลือกสถานการณ์", (x) => !x.sc], ["ระหว่างฉากเปิด (ก่อนข้อ 1)", (x) => x.sc && !x.q], ["ข้อ 1–2", (x) => x.q === 1], ["ข้อ 3–5", (x) => x.q === 3], ["ข้อ 6–8", (x) => x.q === 6], ["ข้อ 9–10", (x) => x.q === 9]];
-          const bySc = {}; nd.forEach((x) => { const k = SCEN_TH[x.sc] || "ยังไม่เลือก"; bySc[k] = (bySc[k] || 0) + 1; });
+          const bySc = {}; ndAll.forEach((x) => { const k = SCEN_TH[x.sc] || "ยังไม่เลือก"; bySc[k] = (bySc[k] || 0) + 1; });
           return (
             <div className="flex flex-col gap-2 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
-              <span className="text-sm" style={{ color: "var(--dim)" }}>ผู้ที่ยังเล่นไม่จบ {nd.length} คน · หยุดตรงไหน (นับเฉพาะรอบหลังอัปเดต 3 พ.ย. ที่บันทึกความคืบหน้า)</span>
+              <span className="text-sm" style={{ color: "var(--dim)" }}>ผู้ที่ยังเล่นไม่จบ {ndAll.length} คน · จุดที่หยุดนับได้เฉพาะผู้เล่นหลัง 3 พ.ย. 15:20 น. ({nd.length} คน)</span>
               <div className="flex flex-wrap gap-2 text-sm">{b.map(([t, f]) => { const c = nd.filter(f).length; return c ? <span key={t} className="px-2 py-1 border" style={{ borderColor: "var(--line)" }}>{t} <b style={{ color: "var(--amber)" }}>{c}</b></span> : null; })}</div>
               <div className="flex flex-wrap gap-2 text-sm" style={{ color: "var(--dim)" }}>แยกตามสถานการณ์: {Object.entries(bySc).map(([k, v]) => k + " " + v).join(" · ")}</div>
             </div>
@@ -10486,12 +10487,16 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     const il = interludesFor()[k]; const my = ++token.current;
     setPicked(null); setSel(null); setHint(null); setArmed(null); setItemNote(null); setLastFx(null); setTyped("");
     setPhase("interlude");
-    if (il.voice && (window.__QV || {})[il.voice]) later(() => { if (token.current !== my) return; AUDIO.duck(true); playVoice("clip:" + il.voice, il.end, voice.current).then(() => AUDIO.duck(false)); }, il.voiceAt || 0);
+    // ฉากจบเมื่อ "ครบเวลา" และ "เสียงบรรยายพูดจบ" ทั้งคู่ (มือถือโหลดเสียงช้า → เดิมฉากตัดก่อนบรรยายจบ)
+    let timeUp = false, voiceDone = !(il.voice && (window.__QV || {})[il.voice]);
+    const finishIl = () => { if (token.current !== my || !timeUp || !voiceDone) return; setInterlude(null); advance(); };
+    if (!voiceDone) later(() => { if (token.current !== my) return; AUDIO.duck(true); playVoice("clip:" + il.voice, il.end, voice.current).then(() => { AUDIO.duck(false); later(() => { voiceDone = true; finishIl(); }, 600); }); }, il.voiceAt || 0);
     il.lines.forEach((ln, i) => {
       later(() => { if (token.current !== my) return; setInterlude({ k, art: il.art, beat: i, sub: ln.sub }); setTyped(ln.sub); if (ln.sfx) AUDIO.play(ln.sfx); }, ln.at);
       (ln.more || []).forEach(([dly, name]) => later(() => { if (token.current === my) AUDIO.play(name); }, ln.at + dly));
     });
-    later(() => { if (token.current !== my) return; setInterlude(null); advance(); }, il.end);
+    later(() => { timeUp = true; finishIl(); }, il.end);
+    later(() => { voiceDone = true; timeUp = true; finishIl(); }, il.end + 15000);   // กันค้างถ้าเสียงไม่จบ
   };
   const advance = () => {
     setDeltas({}); setProbe(null);
