@@ -25,11 +25,11 @@
   /* Layout: tactical HUD — header strip, 16:9 feed with VN dialogue, action panel, squad + inventory rail. Single dark look by choice. */
   :root {
     --char: #111311;      /* charcoal base */
-    --panel: #191c19;     /* raised panel */
-    --panel-2: #222622;   /* inset */
-    --line: #343b33;      /* hairline */
-    --bone: #e7e4d6;      /* primary text */
-    --dim: #9ba393;       /* secondary text */
+    --panel: #1d211d;     /* raised panel (สว่างขึ้นเพื่อให้อ่านง่าย) */
+    --panel-2: #272c27;   /* inset */
+    --line: #3e463d;      /* hairline */
+    --bone: #f0eee4;      /* primary text */
+    --dim: #b6bdaa;       /* secondary text (เดิมเทาเข้มเกิน อ่านยากบนพื้นดำ) */
     --red: #e5372c;       /* emergency red */
     --green: #84a65a;     /* tactical green */
     --amber: #f2a33a;     /* hazard amber */
@@ -50,7 +50,20 @@
   .game-col > * { flex-shrink: 0; }
   .f-display { font-family: var(--font-display); }
   .f-mono { font-family: var(--font-mono); }
-  .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+  .lbl { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  /* ความอ่านง่าย: เนื้อหาใช้ IBM Plex Sans Thai · ตัวเล็กสุดอ่านได้จริง · มือถือเนื้อหาอย่างน้อย 16px */
+  html body { font-size: 16px; line-height: 1.6; }
+  html .text-xs { font-size: 13px; line-height: 1.5; }
+  html .text-sm { font-size: 15px; line-height: 1.6; }
+  html .text-\[11px\], html .text-\[10px\] { font-size: 12px; }
+  @media (max-width: 640px) {
+    html .text-xs { font-size: 14px; }
+    html .text-sm { font-size: 16px; }
+    html .text-base { font-size: 16.5px; }
+    .lbl { font-size: 12px; letter-spacing: .1em; }
+  }
+  /* หน้าผลลัพธ์ = ช่วงอ่าน ใช้โทนสว่างกว่าตัวเกม */
+  .reading { --char: #232823; --panel: #2c322b; --panel-2: #363d35; --line: #505a4e; --bone: #f6f4ec; --dim: #ccd2c2; background: var(--char); }
   .crt::after {
     content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 80;
     background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
@@ -11835,7 +11848,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
   const two = wide ? "grid-cols-2" : "grid-cols-1";
 
   return (
-    <div className="relative h-full">
+    <div className="relative h-full reading">
       <motion.div className="absolute top-0 left-0 right-0 z-20 pointer-events-none" style={{ background: "#000" }} initial={{ height: "50%" }} animate={{ height: 18 }} transition={{ duration: 1, ease: [0.65, 0, 0.35, 1] }} />
       <motion.div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-none" style={{ background: "#000" }} initial={{ height: "50%" }} animate={{ height: 18 }} transition={{ duration: 1, ease: [0.65, 0, 0.35, 1] }} />
       <div className="absolute inset-0 overflow-y-auto scroll-thin" style={{ paddingBlock: 18 }}>
@@ -11880,7 +11893,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
           </div>
 
           {/* Tabs + ทางลัดไปแต่ละส่วน */}
-          <motion.div variants={rise} className="sticky top-0 z-10 flex flex-col gap-1" style={{ background: "rgba(17,19,17,.95)", backdropFilter: "blur(6px)" }}>
+          <motion.div variants={rise} className="sticky top-0 z-10 flex flex-col gap-1" style={{ background: "var(--char)", backdropFilter: "blur(6px)" }}>
           {teacherMode && <div role="tablist" aria-label="มุมมองผลลัพธ์" className="grid grid-cols-2 gap-1 p-1 border" style={{ borderColor: "var(--line)" }}>
             {[["student", "user-round", "Student Profile", "ผลของผู้เรียน"], ["coach", "layout-dashboard", "Teacher & Coach", "แดชบอร์ดผู้สอน/โค้ช"]].map(([k, ic, en, th]) => (
               <button key={k} id={"tab-" + k} role="tab" aria-selected={tab === k} onClick={() => { if (tab !== k) { AUDIO.play("click"); setTab(k); } }}
@@ -12355,7 +12368,7 @@ function App() {
   const [scenario, setScenario] = useState(null);
   const [result, setResult] = useState(null);
   const [muted, setMuted] = useState(false);
-  const [crt, setCrt] = useState(true);
+  const [crt, setCrt] = useState(false);   // เส้นสแกนไลน์ทับตัวหนังสือทำให้อ่านยาก → ปิดเป็นค่าเริ่มต้น (เปิดได้ที่ปุ่มรูปทีวี)
   const [runId, setRunId] = useState(0);
 
   const toggleMute = () => { const m = !muted; setMuted(m); AUDIO.setMuted(m); };
