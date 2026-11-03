@@ -5007,6 +5007,19 @@ function AboutScreen({ onBack, onPlay }) {
             <p className="text-sm leading-relaxed" style={{ color: "var(--dim)" }}>เวอร์ชันนี้ใช้บริการฟรีทั้งหมด (GitHub Pages · Cloudflare Workers · Gemini API) เล่นได้ทั้งคอมและมือถือโดยไม่ต้องสมัครบัญชี และขยายไปใช้ทั้งมหาวิทยาลัยได้โดยย้ายค่า AI ไปอยู่ในการดูแลของมหาวิทยาลัย</p>
           </Block>
 
+          <Block eyebrow="Team" title="ผู้จัดทำ">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+                <span className="text-sm" style={{ color: "var(--dim)" }}>สมาชิกทีม SURVIMIND</span>
+                <span>นายแสงชัย กุตตวัน</span><span>นางสาวศิรประภา กุจแสง</span><span>นางสาวพรธิตา วรรณยิ่ง</span>
+              </div>
+              <div className="flex flex-col gap-1 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+                <span className="text-sm" style={{ color: "var(--dim)" }}>อาจารย์ที่ปรึกษา (โค้ช)</span>
+                <span>นายพิสิทธิ์ ทิพยเสม</span>
+                <span className="text-sm mt-2" style={{ color: "var(--dim)" }}>Project Pitching USC10967 · Track 1</span>
+              </div>
+            </div>
+          </Block>
           <div className="flex flex-wrap items-center gap-3 pb-4">
             <TacButton id="about-play" icon="arrow-right" onClick={onPlay}>เริ่มเล่น SURVIMIND</TacButton>
             <span className="text-xs" style={{ color: "var(--dim)" }}>เล่นได้ทั้งคอมพิวเตอร์และมือถือ</span>
