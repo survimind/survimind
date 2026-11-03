@@ -266,6 +266,7 @@ function cleanSession(s) {
   put("code", tStr(s.code, 40));
   put("startedAt", tNum(s.startedAt));
   put("finishedAt", tNum(s.finishedAt));
+  put("reached", Number.isInteger(s.reached) && s.reached >= 1 && s.reached <= 10 ? s.reached : undefined);
   // ผลการเล่นเต็ม (คะแนน สภาพทีม พฤติกรรม) สำหรับเปิดหน้าผลลัพธ์ย้อนหลัง
   if (s.result && typeof s.result === "object") {
     const r = JSON.stringify(s.result);
@@ -277,7 +278,7 @@ function metaOf(r) {
   const tm = (r.result && r.result.summary) || {};
   return { t: r.finishedAt || r.startedAt || 0, sc: r.scenario, ch: r.character, mb: r.mbti, g: r.gender, a: r.age, n: r.playerName ? r.playerName.slice(0, 30) : undefined,
     lat: tNum(tm.avgLatency), sw: tNum(tm.totalSwitches), wm: tNum(tm.ef && tm.ef.wm), ic: tNum(tm.ef && tm.ef.ic), cf: tNum(tm.ef && tm.ef.cf),
-    h: tNum(r.result && r.result.meters && r.result.meters.health), p: tNum(r.result && r.result.meters && r.result.meters.panic), done: !!r.finishedAt };
+    h: tNum(r.result && r.result.meters && r.result.meters.health), p: tNum(r.result && r.result.meters && r.result.meters.panic), q: r.reached, done: !!r.finishedAt };
 }
 async function teacherApi(body, env, cors) {
   if (!env.SESSIONS) return json({ ok: false, error: "kv_missing" }, 503, cors);
