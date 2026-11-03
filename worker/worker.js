@@ -76,7 +76,7 @@ export default {
     try { body = JSON.parse(raw); } catch { return json({ ok: false, error: "bad_json" }, 400, cors); }
 
     // ---- ห้องอาจารย์: เก็บและดูผลของนักศึกษา ----
-    if (body && (body.mode === "save" || body.mode === "list" || body.mode === "get")) return teacherApi(body, env, cors);
+    if (body && ["save", "list", "get", "feedback", "feedback_list"].includes(body.mode)) return teacherApi(body, env, cors);
 
     if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
     const player = sanitize(body && body.player);
@@ -288,6 +288,19 @@ async function teacherApi(body, env, cors) {
     await env.SESSIONS.put(key, JSON.stringify(rec), { expirationTtl: SESSION_TTL, metadata: metaOf(rec) });
     return json({ ok: true }, 200, cors);
   }
+  if (body.mode === "feedback") {
+    const f = body.feedback || {};
+    const rating = Math.round(Number(f.rating));
+    const text = tStr(f.text, 1000) || "";
+    const tags = Array.isArray(f.tags) ? f.tags.filter((t) => typeof t === "string").slice(0, 8).map((t) => t.slice(0, 30)) : [];
+    if (!(rating >= 1 && rating <= 5) && !text.trim() && !tags.length) return json({ ok: false, error: "empty_feedback" }, 400, cors);
+    const rec = { t: Date.now(), rating: rating >= 1 && rating <= 5 ? rating : undefined, text: text.trim() || undefined, tags,
+      sid: tStr(f.sid, 40), scenario: ["zombie", "forest", "disaster"].includes(f.scenario) ? f.scenario : undefined,
+      mbti: /^[EI][SN][TF][JP]$/.test(f.mbti || "") ? f.mbti : undefined, device: tStr(f.device, 10), where: tStr(f.where, 20) };
+    const key = "f:" + String(rec.t).padStart(14, "0") + ":" + Math.random().toString(36).slice(2, 8);
+    await env.SESSIONS.put(key, JSON.stringify(rec), { expirationTtl: SESSION_TTL });
+    return json({ ok: true }, 200, cors);
+  }
   if (!env.TEACHER_KEY) return json({ ok: false, error: "teacher_key_missing" }, 503, cors);
   if (!sameKey(String(body.key || ""), env.TEACHER_KEY)) return json({ ok: false, error: "wrong_key" }, 401, cors);
   if (body.mode === "get") {
@@ -295,6 +308,18 @@ async function teacherApi(body, env, cors) {
     if (!sid) return json({ ok: false, error: "bad_sid" }, 400, cors);
     const rec = await env.SESSIONS.get("s:" + sid, "json");
     return rec ? json({ ok: true, session: rec }, 200, cors) : json({ ok: false, error: "not_found" }, 404, cors);
+  }
+  if (body.mode === "feedback_list") {
+    const keys = [];
+    let c;
+    do {
+      const page = await env.SESSIONS.list({ prefix: "f:", cursor: c, limit: 1000 });
+      page.keys.forEach((k) => keys.push(k.name));
+      c = page.list_complete ? undefined : page.cursor;
+    } while (c && keys.length < 3000);
+    keys.sort().reverse();
+    const vals = await Promise.all(keys.slice(0, 300).map((k) => env.SESSIONS.get(k, "json").catch(() => null)));
+    return json({ ok: true, total: keys.length, feedback: vals.filter(Boolean) }, 200, cors);
   }
   const rows = [];
   let cursor;
