@@ -4490,7 +4490,7 @@ function SplashNoise() {
   return <canvas ref={ref} className="sv-noise" aria-hidden="true" />;
 }
 
-function SplashScreen({ onPlay, onData, onAbout, onTeacher, instant = false }) {
+function SplashScreen({ onPlay, onData, onAbout, onTeacher, onLogin, instant = false }) {
   // instant = กลับมาหน้าแรก (เล่นจบ/ย้อนกลับ) → แสดงชื่อเกมและปุ่มทันที ไม่เล่นอินโทรซ้ำ
   const [ready, setReady] = useState(instant);
   const [done, setDone] = useState(instant);   // ข้ามอินโทรแล้ว
@@ -4550,6 +4550,11 @@ function SplashScreen({ onPlay, onData, onAbout, onTeacher, instant = false }) {
                 <Icon name="graduation-cap" size={13} />ห้องอาจารย์ · ดูผลลัพธ์ได้ทันที
               </button>
             )}
+            {onLogin && !isTeacherLink() && (
+              <button id="open-login" onClick={() => { AUDIO.play("click"); onLogin(); }} className="sv-hint" style={{ padding: "4px 10px", background: "transparent", cursor: "pointer", color: "var(--dim)", textDecoration: "underline", textUnderlineOffset: 3 }}>
+                <Icon name="lock-keyhole" size={12} />สำหรับทีม / อาจารย์
+              </button>
+            )}
             {owner && onData && (
               <button id="open-data" onClick={() => { AUDIO.play("click"); onData(); }} className="sv-hint" style={{ border: "1px solid var(--line)", padding: "6px 12px", background: "rgba(17,19,17,.6)", cursor: "pointer" }}>
                 <Icon name="table" size={13} />ข้อมูลผู้ทำแบบทดสอบ (เจ้าของ)
@@ -4590,10 +4595,60 @@ const ABOUT_SAFE = [
 /* ========================= ห้องอาจารย์ (Teacher Console) =========================
    เปิดได้เฉพาะลิงก์ ?teacher หรือ ?editor · ดูผลลัพธ์ตัวอย่างได้ทันทีโดยไม่ต้องกรอกข้อมูลหรือเล่นเกม
    ผลตัวอย่างมาจากการเล่นจริงครบ 10 ข้อ 3 รอบ (คนละสไตล์) เก็บไว้ใน TEACHER_SAMPLES */
-const isTeacherLink = () => { try { const q = new URLSearchParams(window.location.search); return q.has("teacher") || q.has("editor"); } catch (e) { return false; } };
+const isTeacherLink = () => !!editorSession();
+const LOGIN_ERR = { wrong_login: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", accounts_missing: "ยังไม่ได้ตั้งบัญชีทีม (EDITOR_ACCOUNTS) ใน Cloudflare", offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง", no_endpoint: "ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์" };
+function LoginScreen({ onBack }) {
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const submit = async (e) => {
+    if (e) e.preventDefault();
+    if (!user.trim() || !pass) { setErr("กรอกชื่อผู้ใช้และรหัสผ่านให้ครบ"); return; }
+    setBusy(true); setErr("");
+    const r = await STORE.teacherCall({ mode: "login", user: user.trim(), pass });
+    setBusy(false);
+    if (!r || !r.ok || !r.token) { setErr(LOGIN_ERR[r && r.error] || "เข้าสู่ระบบไม่สำเร็จ"); return; }
+    try { localStorage.setItem(EDITOR_SESSION_KEY, JSON.stringify({ token: r.token, user: r.user, exp: r.exp })); } catch (er) { setErr("เบราว์เซอร์นี้บันทึกการเข้าสู่ระบบไม่ได้ (ปิดโหมดไม่ระบุตัวตนแล้วลองใหม่)"); return; }
+    AUDIO.play("select");
+    try { sessionStorage.setItem("sv-open-teacher", "1"); } catch (er) {}   // โหลดใหม่ให้โหมดทีมทำงานทั้งเว็บ แล้วเปิดห้องอาจารย์
+    window.location.replace(window.location.pathname);
+  };
+  return (
+    <div className="h-full flex flex-col grid-bg">
+      <NavBar onBack={onBack} backLabel="หน้าแรก" />
+      <div className="flex-1 min-h-0 overflow-y-auto scroll-thin flex items-center justify-center py-8">
+        <form onSubmit={submit} className="w-full max-w-sm flex flex-col gap-4 p-6 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+          <div className="flex flex-col gap-1">
+            <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="lock-keyhole" size={14} />Team login</span>
+            <h1 className="f-display font-bold text-2xl">เข้าสู่ระบบทีม / อาจารย์</h1>
+            <p className="text-sm" style={{ color: "var(--dim)" }}>สำหรับทีมผู้พัฒนาและอาจารย์ เพื่อข้ามฉาก ดูผลตัวอย่าง และดูผลของนักศึกษา</p>
+          </div>
+          <label className="flex flex-col gap-1 text-sm">ชื่อผู้ใช้
+            <input id="login-user" value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false}
+              className="px-3 py-2 text-base border" style={{ borderColor: "var(--line)", background: "var(--panel-2)", color: "var(--bone)" }} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">รหัสผ่าน
+            <span className="flex gap-2">
+              <input id="login-pass" type={show ? "text" : "password"} value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="current-password"
+                className="flex-1 min-w-0 px-3 py-2 text-base border" style={{ borderColor: "var(--line)", background: "var(--panel-2)", color: "var(--bone)" }} />
+              <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"} className="px-3 border" style={{ borderColor: "var(--line)", color: "var(--dim)" }}><Icon name={show ? "eye-off" : "eye"} size={16} /></button>
+            </span>
+          </label>
+          {err && <p className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
+          <button id="login-submit" type="submit" disabled={busy} className="cut f-display font-semibold inline-flex items-center justify-center gap-2 px-6 py-3"
+            style={{ background: busy ? "var(--panel-2)" : "var(--amber)", color: busy ? "var(--dim)" : "#111311" }}><Icon name="log-in" size={18} />{busy ? "กำลังตรวจสอบ…" : "เข้าสู่ระบบ"}</button>
+          <p className="text-xs" style={{ color: "var(--dim)" }}>อยู่ในระบบได้ 7 วันบนเบราว์เซอร์นี้ · ใช้เครื่องคนอื่นอย่าลืมกดออกจากระบบ</p>
+        </form>
+      </div>
+    </div>
+  );
+}
 const STUDENT_LINK = "https://survimind.github.io/survimind/";
 const TEACHER_ERR = {
   wrong_key: "รหัสอาจารย์ไม่ถูกต้อง",
+  session_expired: "การเข้าสู่ระบบหมดอายุ กรุณาออกจากระบบแล้วเข้าใหม่",
   kv_missing: "ยังไม่ได้เชื่อมที่เก็บข้อมูล (KV) ใน Cloudflare · ทำตามขั้นตอนในไฟล์ worker/SETUP.md หัวข้อห้องอาจารย์",
   teacher_key_missing: "ยังไม่ได้ตั้งรหัสอาจารย์ (TEACHER_KEY) ใน Cloudflare",
   offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง",
@@ -4606,18 +4661,21 @@ function StudentResults({ onOpen }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState("");
+  const ses = editorSession();
+  const auth = () => (ses && !key.trim() ? { token: ses.token } : { key: key.trim(), token: ses ? ses.token : undefined });
+  useEffect(() => { if (ses) load(); }, []);
   const load = async () => {
-    if (!key.trim()) { setErr("ใส่รหัสอาจารย์ก่อน"); return; }
+    if (!key.trim() && !ses) { setErr("ใส่รหัสอาจารย์ก่อน"); return; }
     setBusy(true); setErr("");
-    const r = await STORE.teacherCall({ mode: "list", key: key.trim() });
+    const r = await STORE.teacherCall({ mode: "list", ...auth() });
     setBusy(false);
     if (!r || !r.ok) { setErr(TEACHER_ERR[r && r.error] || "โหลดข้อมูลไม่สำเร็จ (" + ((r && r.error) || "unknown") + ")"); return; }
-    try { sessionStorage.setItem("sv-teacher-key", key.trim()); } catch (e) {}
+    try { if (key.trim()) sessionStorage.setItem("sv-teacher-key", key.trim()); } catch (e) {}
     setRows(r.sessions || []);
   };
   const open = async (row) => {
     setOpening(row.sid);
-    const r = await STORE.teacherCall({ mode: "get", key: key.trim(), sid: row.sid });
+    const r = await STORE.teacherCall({ mode: "get", ...auth(), sid: row.sid });
     setOpening("");
     if (!r || !r.ok || !r.session || !r.session.result) { setErr("เปิดผลของรอบนี้ไม่ได้ (ยังเล่นไม่จบ หรือไม่มีข้อมูลผลลัพธ์)"); return; }
     onOpen(r.session);
@@ -4645,8 +4703,8 @@ function StudentResults({ onOpen }) {
     <section className="flex flex-col gap-3">
       <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>2. ผลของนักศึกษาที่เล่นจริง</h2>
       <div className="flex flex-wrap items-center gap-2">
-        <input id="teacher-key" type="password" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") load(); }} placeholder="รหัสอาจารย์" autoComplete="current-password"
-          className="px-3 py-2 text-base border min-w-0 flex-1" style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--bone)", maxWidth: 280 }} />
+        {!ses && <input id="teacher-key" type="password" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") load(); }} placeholder="รหัสอาจารย์" autoComplete="current-password"
+          className="px-3 py-2 text-base border min-w-0 flex-1" style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--bone)", maxWidth: 280 }} />}
         <TacButton id="teacher-load" icon={busy ? "loader" : "download"} tone="green" disabled={busy} onClick={load}>{rows ? "โหลดใหม่" : "ดูผลของนักศึกษา"}</TacButton>
         {rows && rows.length > 0 && <button id="teacher-csv" onClick={csv} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border" style={{ borderColor: "var(--line)", color: "var(--bone)" }}><Icon name="file-spreadsheet" size={14} />ดาวน์โหลด CSV</button>}
       </div>
@@ -4703,9 +4761,10 @@ function FeedbackList() {
   const load = async () => {
     let key = ""; try { key = sessionStorage.getItem("sv-teacher-key") || ""; } catch (e) {}
     const inp = document.getElementById("teacher-key"); if (inp && inp.value) key = inp.value.trim();
-    if (!key) { setErr("ใส่รหัสอาจารย์ในข้อ 2 ก่อน"); return; }
+    const ses = editorSession();
+    if (!key && !ses) { setErr("ใส่รหัสอาจารย์ในข้อ 2 ก่อน"); return; }
     setBusy(true); setErr("");
-    const r = await STORE.teacherCall({ mode: "feedback_list", key });
+    const r = await STORE.teacherCall({ mode: "feedback_list", key: key || undefined, token: ses ? ses.token : undefined });
     setBusy(false);
     if (!r || !r.ok) { setErr(TEACHER_ERR[r && r.error] || "โหลดไม่สำเร็จ"); return; }
     setData(r);
@@ -4721,7 +4780,7 @@ function FeedbackList() {
       <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>3. ความคิดเห็นจากผู้ใช้</h2>
       <div className="flex flex-wrap items-center gap-2">
         <TacButton id="feedback-load" icon="message-circle-heart" tone="green" disabled={busy} onClick={load}>{data ? "โหลดใหม่" : "ดูความคิดเห็น"}</TacButton>
-        <span className="text-sm" style={{ color: "var(--dim)" }}>ใช้รหัสอาจารย์เดียวกับข้อ 2</span>
+        {!editorSession() && <span className="text-sm" style={{ color: "var(--dim)" }}>ใช้รหัสอาจารย์เดียวกับข้อ 2</span>}
       </div>
       {err && <p className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
       {data && (<>
@@ -4761,7 +4820,11 @@ function TeacherScreen({ onBack, onSample, onData, onPlay, onOpenStudent }) {
       <div className="flex-1 min-h-0 overflow-y-auto scroll-thin">
         <div className="mx-auto max-w-5xl flex flex-col gap-8 py-8">
           <header className="flex flex-col gap-2">
-            <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="graduation-cap" size={14} />Teacher Console · ห้องอาจารย์</span>
+            <span className="flex flex-wrap items-center justify-between gap-2">
+              <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="graduation-cap" size={14} />Teacher Console · ห้องอาจารย์</span>
+              {editorSession() && <span className="inline-flex items-center gap-2 text-sm" style={{ color: "var(--dim)" }}><Icon name="user-round" size={14} />{editorSession().user}
+                <button id="logout" onClick={() => { editorLogout(); window.location.href = window.location.pathname; }} className="px-2 py-1 text-xs border" style={{ borderColor: "var(--line)", color: "var(--bone)" }}>ออกจากระบบ</button></span>}
+            </span>
             <h1 className="f-display font-bold text-3xl sm:text-5xl leading-tight">ดูผลลัพธ์ได้ทันที <span style={{ color: "var(--amber)" }}>ไม่ต้องเล่นเกม</span></h1>
             <p className="text-base sm:text-lg leading-relaxed max-w-2xl">เลือกผลตัวอย่างด้านล่างเพื่อดูว่านักศึกษาจะได้อะไรหลังเล่นจบ ทั้งฝั่งผู้เรียน (Student Profile) และแดชบอร์ดผู้สอน (Teacher & Coach)</p>
           </header>
@@ -5371,8 +5434,12 @@ function ScenarioArt({ id }) {
 // แถบ EDITOR นอก Claude (เช่น GitHub Pages): SHOW_EDITOR = true → ทุกคนเห็น (ช่วงพัฒนา)
 // ⚠️ ก่อนเปิดให้คนทั่วไปเล่น/นำเสนอ เปลี่ยนเป็น false (ทีมยังเปิดได้ด้วยลิงก์ ?editor)
 // ดูมุมมองผู้เล่นจริงระหว่างพัฒนา: ต่อท้ายลิงก์ด้วย ?player
-const SHOW_EDITOR = false;   // ปิดแล้วสำหรับวันนำเสนอ (2 พ.ย. 2569) · ทีมเปิดได้ด้วยลิงก์ ?editor
-const EDITOR_BY_URL = (() => { try { const q = new URLSearchParams(window.location.search); if (q.has("player")) return false; return SHOW_EDITOR || q.has("editor"); } catch (e) { return SHOW_EDITOR; } })();
+const SHOW_EDITOR = false;   // ปิดสำหรับผู้เล่นทั่วไป · ทีมเปิดได้โดย "เข้าสู่ระบบทีม" ที่หน้าแรก
+// เข้าสู่ระบบทีม (Editor): ชื่อผู้ใช้ + รหัสผ่าน ตรวจที่ Worker (EDITOR_ACCOUNTS) · ได้ token อายุ 7 วัน เก็บในเบราว์เซอร์นี้
+const EDITOR_SESSION_KEY = "sv-editor-session";
+function editorSession() { try { const v = JSON.parse(localStorage.getItem(EDITOR_SESSION_KEY) || "null"); return v && v.token && v.exp > Date.now() ? v : null; } catch (e) { return null; } }
+function editorLogout() { try { localStorage.removeItem(EDITOR_SESSION_KEY); } catch (e) {} }
+const EDITOR_BY_URL = (() => { try { const q = new URLSearchParams(window.location.search); if (q.has("player")) return false; return SHOW_EDITOR || !!editorSession(); } catch (e) { return SHOW_EDITOR; } })();
 function useIsEditor() {
   const [ed, setEd] = useState(false);
   useEffect(() => {
@@ -11686,7 +11753,7 @@ function ResultScreen({ device, charId, result, onRestart }) {
   const [tab, setTab] = useState("student");
   // แท็บ Teacher & Coach สำหรับอาจารย์เท่านั้น: เปิดด้วยลิงก์ ?teacher (หรือ ?editor) · ผู้เล่นทั่วไปเห็นแค่ผลของตัวเอง
   const editorMode = useIsEditor();
-  const teacherMode = editorMode || (() => { try { return new URLSearchParams(window.location.search).has("teacher"); } catch (e) { return false; } })();
+  const teacherMode = editorMode || isTeacherLink();
   const [detail, setDetail] = useState(false);
   const [jump, setJump] = useState(null);
   useEffect(() => setJump(null), [tab]);
@@ -12277,8 +12344,12 @@ class ScreenBoundary extends React.Component {
 
 /* ========================= App ========================= */
 function App() {
-  const [screen, setScreen] = useState("splash"); // splash → title → profile → scenario → select → intro → game → result (+ data สำหรับเจ้าของ)
+  const [screen, setScreen] = useState(() => { try { if (sessionStorage.getItem("sv-open-teacher") && editorSession()) { sessionStorage.removeItem("sv-open-teacher"); return "teacher"; } } catch (e) {} return "splash"; }); // splash → title → profile → scenario → select → intro → game → result (+ data สำหรับเจ้าของ)
   const [profile, setProfile] = useState(null);   // { sid, gender, age }
+  useEffect(() => {   // ตรวจว่าการเข้าสู่ระบบทีมยังใช้ได้ (หมดอายุ/บัญชีถูกเปลี่ยน → ออกจากระบบ)
+    const ses = editorSession(); if (!ses) return;
+    STORE.teacherCall({ mode: "verify", token: ses.token }).then((r) => { if (r && !r.ok && (r.error === "session_expired" || r.error === "accounts_missing")) { editorLogout(); window.location.reload(); } });
+  }, []);
   const [device, setDevice] = useState("pc");
   const [charId, setCharId] = useState(null);
   const [scenario, setScenario] = useState(null);
@@ -12337,7 +12408,8 @@ function App() {
             : { width: "100%", height: "100%", background: "var(--char)" }}>
           <AnimatePresence mode="wait">
             <motion.div key={screen + runId} {...fade} className="h-full w-full"><ScreenBoundary>
-              {(screen === "splash" || screen === "home") && <SplashScreen instant={screen === "home"} onPlay={() => start(detectDevice())} onData={() => setScreen("data")} onAbout={() => setScreen("about")} onTeacher={() => setScreen("teacher")} />}
+              {(screen === "splash" || screen === "home") && <SplashScreen instant={screen === "home"} onPlay={() => start(detectDevice())} onData={() => setScreen("data")} onAbout={() => setScreen("about")} onTeacher={() => setScreen("teacher")} onLogin={() => setScreen("login")} />}
+              {screen === "login" && <LoginScreen onBack={() => setScreen("home")} />}
               {screen === "teacher" && <TeacherScreen onBack={() => setScreen("home")} onData={() => setScreen("data")} onPlay={() => start(detectDevice())}
                 onSample={(smp) => { setActiveScenario(smp.scenario); setScenario(smp.scenario); setCharId(smp.charId); setDevice(detectDevice()); setResult({ ...smp.r, sample: true }); setScreen("result"); }}
                 onOpenStudent={(ss) => { const sc = ss.scenario || "zombie"; setActiveScenario(sc); setScenario(sc); setCharId(ss.character || "ek"); setDevice(detectDevice()); setResult({ ...ss.result, code: ss.code, sid: ss.sid, sample: true }); setScreen("result"); }} />}

@@ -14,6 +14,8 @@
  *                    ค่าเริ่มต้น gemini-3.5-flash-lite,gemini-3.8-flash
  *   TEACHER_KEY      (Secret, สำหรับห้องอาจารย์) รหัสที่อาจารย์ใช้ดูผลของนักศึกษา
  *   SESSIONS         (KV namespace binding, สำหรับห้องอาจารย์) ที่เก็บผลการเล่นของนักศึกษา
+ *   EDITOR_ACCOUNTS  (Secret, สำหรับเข้าสู่ระบบทีม) บัญชี ชื่อผู้ใช้:รหัสผ่าน คั่นหลายบัญชีด้วยจุลภาค
+ *                    เช่น  admin:รหัสยาวๆ,teacher:อีกรหัส  (เปลี่ยนค่านี้ = ทุกคนต้องเข้าสู่ระบบใหม่)
  *
  * ห้องอาจารย์ (mode):
  *   save  → บันทึก/อัปเดตผลการเล่น 1 รอบ (ไม่ต้องใช้รหัส · รับเฉพาะฟิลด์ที่กำหนด · ไม่รับข้อมูลส่วนตัวอื่น)
@@ -76,6 +78,7 @@ export default {
     try { body = JSON.parse(raw); } catch { return json({ ok: false, error: "bad_json" }, 400, cors); }
 
     // ---- ห้องอาจารย์: เก็บและดูผลของนักศึกษา ----
+    if (body && (body.mode === "login" || body.mode === "verify")) return editorAuth(body, env, cors);
     if (body && ["save", "list", "get", "feedback", "feedback_list"].includes(body.mode)) return teacherApi(body, env, cors);
 
     if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
@@ -301,8 +304,12 @@ async function teacherApi(body, env, cors) {
     await env.SESSIONS.put(key, JSON.stringify(rec), { expirationTtl: SESSION_TTL });
     return json({ ok: true }, 200, cors);
   }
-  if (!env.TEACHER_KEY) return json({ ok: false, error: "teacher_key_missing" }, 503, cors);
-  if (!sameKey(String(body.key || ""), env.TEACHER_KEY)) return json({ ok: false, error: "wrong_key" }, 401, cors);
+  // เข้าได้ 2 ทาง: เข้าสู่ระบบทีม (token) หรือรหัสอาจารย์ (TEACHER_KEY)
+  const byToken = body.token ? await verifyToken(String(body.token), env) : null;
+  if (!byToken) {
+    if (!env.TEACHER_KEY) return json({ ok: false, error: body.token ? "session_expired" : "teacher_key_missing" }, body.token ? 401 : 503, cors);
+    if (!sameKey(String(body.key || ""), env.TEACHER_KEY)) { await sleep(500); return json({ ok: false, error: body.token && !body.key ? "session_expired" : "wrong_key" }, 401, cors); }
+  }
   if (body.mode === "get") {
     const sid = tStr(body.sid, 40);
     if (!sid) return json({ ok: false, error: "bad_sid" }, 400, cors);
@@ -330,4 +337,44 @@ async function teacherApi(body, env, cors) {
   } while (cursor && rows.length < 5000);
   rows.sort((a, b) => (b.t || 0) - (a.t || 0));
   return json({ ok: true, sessions: rows }, 200, cors);
+}
+
+
+// ================= เข้าสู่ระบบทีม (Editor) =================
+const TOKEN_DAYS = 7;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const b64uText = (t) => b64u(new TextEncoder().encode(t));
+const unb64uText = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)));
+function accountsOf(env) {
+  return String(env.EDITOR_ACCOUNTS || "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean)
+    .map((x) => { const i = x.indexOf(":"); return i > 0 ? { u: x.slice(0, i).trim(), p: x.slice(i + 1).trim() } : null; }).filter((a) => a && a.u && a.p);
+}
+async function sign(text, env) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("survimind-editor|" + env.EDITOR_ACCOUNTS), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return b64u(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text)));
+}
+async function verifyToken(token, env) {
+  try {
+    if (!env.EDITOR_ACCOUNTS) return null;
+    const [body, sig] = token.split(".");
+    if (!body || !sig || !sameKey(sig, await sign(body, env))) return null;
+    const data = JSON.parse(unb64uText(body));
+    if (!data || !data.u || !(data.exp > Date.now())) return null;
+    if (!accountsOf(env).some((a) => a.u === data.u)) return null;
+    return data;
+  } catch { return null; }
+}
+async function editorAuth(body, env, cors) {
+  if (!env.EDITOR_ACCOUNTS) return json({ ok: false, error: "accounts_missing" }, 503, cors);
+  if (body.mode === "verify") {
+    const d = await verifyToken(String(body.token || ""), env);
+    return d ? json({ ok: true, user: d.u, exp: d.exp }, 200, cors) : json({ ok: false, error: "session_expired" }, 401, cors);
+  }
+  const u = tStr(body.user, 40) || "", p = tStr(body.pass, 200) || "";
+  const acc = accountsOf(env).find((a) => sameKey(u.trim(), a.u));
+  if (!acc || !sameKey(p, acc.p)) { await sleep(700); return json({ ok: false, error: "wrong_login" }, 401, cors); }
+  const exp = Date.now() + TOKEN_DAYS * 864e5;
+  const payload = b64uText(JSON.stringify({ u: acc.u, exp }));
+  return json({ ok: true, user: acc.u, exp, token: payload + "." + (await sign(payload, env)) }, 200, cors);
 }
