@@ -4732,20 +4732,22 @@ const isTeacherLink = () => !!editorSession();
 const LOGIN_ERR = { wrong_login: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", accounts_missing: "ยังไม่ได้ตั้งบัญชีทีม (EDITOR_ACCOUNTS) ใน Cloudflare", offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง", no_endpoint: "ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์" , pending: "บัญชีนี้ยังรอทีมอนุมัติ ลองใหม่หลังได้รับแจ้ง", disabled: "บัญชีนี้ถูกปิดใช้งาน ติดต่อทีมผู้ดูแล" };
 const ACCT_ERR = { bad_user: "ชื่อผู้ใช้ใช้ได้เฉพาะ a-z 0-9 _ . - ยาว 3–30 ตัว", weak_pass: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัว", need_name: "กรอกชื่อ-นามสกุล", user_taken: "ชื่อผู้ใช้นี้มีคนใช้แล้ว",
   too_many_pending: "มีคำขอรออนุมัติจำนวนมาก ลองใหม่ภายหลัง", wrong_old: "รหัสผ่านเดิมไม่ถูกต้อง", env_account: "บัญชีนี้ตั้งโดยทีมใน Cloudflare เปลี่ยนรหัสผ่านได้ที่ทีมผู้ดูแล",
-  admin_only: "เฉพาะทีมผู้ดูแล", session_expired: "การเข้าสู่ระบบหมดอายุ กรุณาเข้าใหม่", offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้", accounts_missing: "ระบบบัญชียังไม่ได้ตั้งค่าใน Cloudflare", kv_missing: "ยังไม่ได้เชื่อมที่เก็บข้อมูล (KV)" };
+  admin_only: "เฉพาะทีมผู้ดูแล", need_consent: "กรุณาอ่านและติ๊กยินยอมการเก็บข้อมูลก่อนส่ง", session_expired: "การเข้าสู่ระบบหมดอายุ กรุณาเข้าใหม่", offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้", accounts_missing: "ระบบบัญชียังไม่ได้ตั้งค่าใน Cloudflare", kv_missing: "ยังไม่ได้เชื่อมที่เก็บข้อมูล (KV)" };
 const acctErr = (r) => ACCT_ERR[r && r.error] || "ทำรายการไม่สำเร็จ (" + ((r && r.error) || "unknown") + ")";
 const inputCls = "px-3 py-2 text-base border min-w-0";
 const inputSty = { borderColor: "var(--line)", background: "var(--panel-2)", color: "var(--bone)" };
 // อาจารย์ขอสมัครเอง → สถานะรออนุมัติ → ทีมกดอนุมัติในห้องอาจารย์
 function RegisterScreen({ onBack }) {
   const [f, setF] = useState({ name: "", org: "", user: "", pass: "", pass2: "", note: "" });
+  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [sent, setSent] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: k === "user" ? e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "") : e.target.value });
   const submit = async (e) => {
     e.preventDefault();
     if (f.pass !== f.pass2) { setErr("รหัสผ่านสองช่องไม่ตรงกัน"); return; }
+    if (!consent) { setErr(ACCT_ERR.need_consent); return; }
     setBusy(true); setErr("");
-    const r = await STORE.teacherCall({ mode: "register", name: f.name, org: f.org, user: f.user, pass: f.pass, note: f.note });
+    const r = await STORE.teacherCall({ mode: "register", name: f.name, org: f.org, user: f.user, pass: f.pass, note: f.note, consent: true });
     setBusy(false);
     if (!r || !r.ok) { setErr(acctErr(r)); return; }
     setSent(true);
@@ -4777,6 +4779,17 @@ function RegisterScreen({ onBack }) {
             {field("pass", "รหัสผ่าน (อย่างน้อย 8 ตัว)", { type: "password", autoComplete: "new-password" })}
             {field("pass2", "ยืนยันรหัสผ่าน", { type: "password", autoComplete: "new-password" })}
             {field("note", "หมายเหตุถึงทีม (ไม่บังคับ) เช่น รายวิชาที่จะใช้", { maxLength: 300 })}
+            <div id="reg-pdpa" className="flex flex-col gap-1.5 p-3 border-l-2 text-xs leading-relaxed" style={{ borderColor: "var(--green)", background: "rgba(132,166,90,.07)" }}>
+              <b className="text-sm" style={{ color: "var(--green)" }}>การเก็บข้อมูลส่วนบุคคล (PDPA)</b>
+              <span><b>เก็บอะไร:</b> ชื่อ-นามสกุล คณะ/หน่วยงาน ชื่อผู้ใช้ และรหัสผ่าน (เก็บแบบเข้ารหัส ทีมดูรหัสจริงไม่ได้)</span>
+              <span><b>ใช้ทำอะไร:</b> ยืนยันว่าเป็นอาจารย์ และจัดการบัญชีห้องเรียนของคุณเท่านั้น ไม่ใช้เพื่อการตลาด ไม่ส่งให้บุคคลภายนอก</span>
+              <span><b>ใครเห็น:</b> ทีมผู้ดูแล SURVIMIND · <b>เก็บนานแค่ไหน:</b> จนกว่าคุณขอลบบัญชี</span>
+              <span><b>สิทธิ์ของคุณ:</b> ขอดู แก้ไข หรือลบข้อมูลได้ทุกเมื่อโดยติดต่อทีมผู้ดูแล</span>
+            </div>
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input id="reg-consent" type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); setErr(""); }} className="mt-1 w-4 h-4 shrink-0" />
+              <span>ฉันอ่านแล้ว และยินยอมให้เก็บและใช้ข้อมูลข้างต้นเพื่อสร้างบัญชีอาจารย์</span>
+            </label>
             {err && <p id="reg-err" className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
             <button id="reg-submit" type="submit" disabled={busy} className="cut f-display font-semibold inline-flex items-center justify-center gap-2 px-6 py-3" style={{ background: busy ? "var(--panel-2)" : "var(--green)", color: busy ? "var(--dim)" : "#111311" }}><Icon name="send" size={18} />{busy ? "กำลังส่ง…" : "ส่งคำขอสมัคร"}</button>
           </form>
@@ -4786,6 +4799,42 @@ function RegisterScreen({ onBack }) {
   );
 }
 // อาจารย์เปลี่ยนรหัสผ่านเอง
+// ข้อตกลงการใช้ข้อมูลนักศึกษา: อาจารย์ต้องยอมรับก่อนดูผล (ระบบหลังบ้านบังคับด้วย)
+const TERMS_ITEMS = [
+  "ใช้ผลของนักศึกษาเพื่อดูแลการเรียนและให้คำปรึกษาเท่านั้น ไม่ใช้ตัดเกรด คัดเลือก หรือลงโทษ",
+  "ไม่เผยแพร่หรือส่งต่อข้อมูลรายบุคคลให้ผู้อื่นโดยไม่จำเป็น ไฟล์ CSV ที่ดาวน์โหลดต้องเก็บอย่างปลอดภัยและลบเมื่อหมดความจำเป็น",
+  "ผลเป็นเครื่องมือสะท้อนตัวเอง ไม่ใช่การวินิจฉัยทางจิตวิทยา ถ้าพบนักศึกษาที่น่าเป็นห่วง ให้ส่งต่อหน่วยให้คำปรึกษาของมหาวิทยาลัย",
+  "แจ้งนักศึกษาว่าผลจะส่งให้อาจารย์ของห้องดู และนักศึกษาเลือกเล่นแบบไม่เข้าห้องได้",
+  "ออกจากระบบทุกครั้งเมื่อใช้เครื่องสาธารณะ",
+];
+function TermsGate() {
+  const ses = editorSession();
+  const [need, setNeed] = useState(false), [ok, setOk] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  useEffect(() => { if (ses && editorRole() === "teacher") STORE.teacherCall({ mode: "verify", token: ses.token }).then((r) => { if (r && r.ok && r.terms === false) setNeed(true); }); }, []);
+  if (!need) return null;
+  const accept = async () => {
+    setBusy(true); setErr("");
+    const r = await STORE.teacherCall({ mode: "accept_terms", token: ses.token });
+    setBusy(false);
+    if (!r || !r.ok) { setErr(acctErr(r)); return; }
+    window.location.reload();
+  };
+  return (
+    <div id="terms-gate" role="dialog" aria-label="ข้อตกลงการใช้ข้อมูลนักศึกษา" className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" style={{ background: "rgba(5,6,5,.92)" }}>
+      <div className="w-full max-w-xl flex flex-col gap-4 p-6 border" style={{ borderColor: "var(--amber)", background: "var(--panel)" }}>
+        <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="shield-check" size={14} />PDPA · ก่อนดูผลของนักศึกษา</span>
+        <h2 className="f-display font-bold text-2xl">ข้อตกลงการใช้ข้อมูลนักศึกษา</h2>
+        <ol className="flex flex-col gap-2 text-sm leading-relaxed list-decimal pl-5">{TERMS_ITEMS.map((t) => <li key={t}>{t}</li>)}</ol>
+        <label className="flex items-start gap-2 text-sm cursor-pointer"><input id="terms-check" type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} className="mt-1 w-4 h-4 shrink-0" />ฉันอ่านและยอมรับข้อตกลงข้างต้น</label>
+        {err && <p className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
+        <div className="flex flex-wrap gap-3">
+          <TacButton id="terms-accept" icon="check" tone="green" disabled={!ok || busy} onClick={accept}>{busy ? "กำลังบันทึก…" : "ยอมรับและเข้าห้องอาจารย์"}</TacButton>
+          <button onClick={() => { editorLogout(); window.location.href = window.location.pathname; }} className="px-3 py-2 text-sm border" style={{ borderColor: "var(--line)", color: "var(--dim)" }}>ไม่ยอมรับ · ออกจากระบบ</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function MyAccount() {
   const ses = editorSession();
   const [f, setF] = useState({ old: "", n1: "", n2: "" });
@@ -4927,6 +4976,7 @@ function LoginScreen({ onBack }) {
 const STUDENT_LINK = "https://survimind.github.io/survimind/";
 const TEACHER_ERR = {
   wrong_key: "รหัสอาจารย์ไม่ถูกต้อง",
+  terms_required: "ต้องยอมรับข้อตกลงการใช้ข้อมูลนักศึกษาก่อน (รีเฟรชหน้านี้)",
   session_expired: "การเข้าสู่ระบบหมดอายุ กรุณาออกจากระบบแล้วเข้าใหม่",
   kv_missing: "ยังไม่ได้เชื่อมที่เก็บข้อมูล (KV) ใน Cloudflare · ทำตามขั้นตอนในไฟล์ worker/SETUP.md หัวข้อห้องอาจารย์",
   teacher_key_missing: "ยังไม่ได้ตั้งรหัสอาจารย์ (TEACHER_KEY) ใน Cloudflare",
@@ -5290,6 +5340,7 @@ function TeacherScreen({ onBack, onSample, onData, onPlay, onOpenStudent }) {
   return (
     <div className="h-full flex flex-col grid-bg">
       <NavBar onBack={onBack} backLabel="หน้าแรก" />
+      <TermsGate />
       <div className="flex-1 min-h-0 overflow-y-auto scroll-thin">
         <div className="mx-auto max-w-5xl flex flex-col gap-8 py-8">
           <header className="flex flex-col gap-2">

@@ -80,7 +80,7 @@ export default {
 
     // ---- ห้องอาจารย์: เก็บและดูผลของนักศึกษา ----
     if (body && (body.mode === "login" || body.mode === "verify")) return editorAuth(body, env, cors);
-    if (body && ["register", "change_password", "acct_list", "acct_create", "acct_set"].includes(body.mode)) return accountApi(body, env, cors);
+    if (body && ["register", "change_password", "accept_terms", "acct_list", "acct_create", "acct_set"].includes(body.mode)) return accountApi(body, env, cors);
     if (body && ["save", "list", "get", "feedback", "feedback_list", "room_info", "room_create", "room_list", "room_delete"].includes(body.mode)) return teacherApi(body, env, cors);
 
     if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
@@ -327,6 +327,7 @@ async function teacherApi(body, env, cors) {
   // บทบาท: อาจารย์เห็นเฉพาะห้องของตัวเอง · ทีม/รหัสอาจารย์ (TEACHER_KEY) เห็นทุกอย่าง
   const isAdmin = !byToken || byToken.r === "admin";
   const me = byToken ? byToken.u : "teacher";
+  if (!isAdmin && !(await termsOk(env, me))) return json({ ok: false, error: "terms_required" }, 403, cors);   // ยังไม่ยอมรับข้อตกลงการใช้ข้อมูล
   const myRooms = async () => {
     const set = new Set(); let c;
     do {
@@ -421,6 +422,9 @@ async function sign(text, env) {
 // ---- บัญชีอาจารย์ที่สมัครผ่านเว็บ (เก็บใน KV "a:<ชื่อผู้ใช้>") ----
 // สถานะ: pending (รอทีมอนุมัติ) · active · disabled · รหัสผ่านเก็บเป็น PBKDF2-SHA256 + salt ไม่เก็บรหัสจริง
 const PBKDF2_ITER = 20000;
+// ข้อตกลงการใช้ข้อมูลนักศึกษา (อาจารย์ต้องกดยอมรับก่อนดูผล) · เปลี่ยนเนื้อหาข้อตกลงให้เพิ่มเลขเวอร์ชัน
+const TERMS_VERSION = 1;
+async function termsOk(env, u) { try { const r = await env.SESSIONS.get("tos:" + u, "json"); return !!(r && r.v >= TERMS_VERSION); } catch { return false; } }
 const USER_RE = /^[a-z0-9_.-]{3,30}$/;
 async function hashPass(pass, saltB64) {
   const salt = saltB64 ? Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
@@ -458,7 +462,8 @@ async function editorAuth(body, env, cors) {
   if (!signReady(env)) return json({ ok: false, error: "accounts_missing" }, 503, cors);
   if (body.mode === "verify") {
     const d = await verifyToken(String(body.token || ""), env);
-    return d ? json({ ok: true, user: d.u, exp: d.exp, role: d.r, src: d.src }, 200, cors) : json({ ok: false, error: "session_expired" }, 401, cors);
+    if (!d) return json({ ok: false, error: "session_expired" }, 401, cors);
+    return json({ ok: true, user: d.u, exp: d.exp, role: d.r, src: d.src, terms: d.r === "admin" ? true : await termsOk(env, d.u) }, 200, cors);
   }
   const u = (tStr(body.user, 40) || "").trim(), p = tStr(body.pass, 200) || "";
   const acc = accountsOf(env).find((a) => sameKey(u, a.u));
@@ -479,12 +484,13 @@ async function accountApi(body, env, cors) {
     if (!USER_RE.test(u)) return json({ ok: false, error: "bad_user" }, 400, cors);
     if (p.length < 8) return json({ ok: false, error: "weak_pass" }, 400, cors);
     if (!name) return json({ ok: false, error: "need_name" }, 400, cors);
+    if (body.consent !== true) return json({ ok: false, error: "need_consent" }, 400, cors);   // PDPA: ต้องยินยอมก่อนเก็บข้อมูลบัญชี
     if (accountsOf(env).some((a) => a.u.toLowerCase() === u) || (await getAcct(env, u))) return json({ ok: false, error: "user_taken" }, 409, cors);
     let pending = 0, c;
     do { const page = await env.SESSIONS.list({ prefix: "a:", cursor: c, limit: 1000 }); pending += page.keys.filter((k) => k.metadata && k.metadata.status === "pending").length; c = page.list_complete ? undefined : page.cursor; } while (c);
     if (pending >= 50) return json({ ok: false, error: "too_many_pending" }, 429, cors);
     const h = await hashPass(p);
-    await putAcct(env, { u, name, org, note, status: "pending", t: Date.now(), ...h, pv: 0 });
+    await putAcct(env, { u, name, org, note, status: "pending", t: Date.now(), consentAt: Date.now(), ...h, pv: 0 });
     return json({ ok: true, status: "pending" }, 200, cors);
   }
   const me = body.token ? await verifyToken(String(body.token), env) : null;
@@ -497,6 +503,10 @@ async function accountApi(body, env, cors) {
     const n = { ...k, ...(await hashPass(np)), pv: (k.pv || 0) + 1 };
     await putAcct(env, n);
     return issue({ ...n, r: "teacher" }, env, cors);   // token ใหม่ (token เก่าทุกเครื่องหมดอายุ)
+  }
+  if (body.mode === "accept_terms") {
+    await env.SESSIONS.put("tos:" + me.u, JSON.stringify({ u: me.u, v: TERMS_VERSION, t: Date.now() }));
+    return json({ ok: true }, 200, cors);
   }
   if (me.r !== "admin") return json({ ok: false, error: "admin_only" }, 403, cors);
   if (body.mode === "acct_list") {
