@@ -505,7 +505,7 @@ async function accountApi(body, env, cors) {
     if (pending >= 50) return json({ ok: false, error: "too_many_pending" }, 429, cors);
     const h = await hashPass(p);
     await putAcct(env, { u, name, org, note, status: "pending", t: Date.now(), consentAt: Date.now(), ...h, pv: 0 });
-    await notify(env, "🔔 **มีอาจารย์ขอสมัครบัญชี SURVIMIND**\nชื่อ: " + name + (org ? "\nคณะ/หน่วยงาน: " + org : "") + "\nชื่อผู้ใช้: `" + u + "`" + (note ? "\nหมายเหตุ: " + note : "") + "\nอนุมัติได้ที่ ห้องอาจารย์ → ข้อ 7 บัญชีอาจารย์ (หน้าเดโม: https://survimind.github.io/survimind/demo/)");
+    await notify(env, "🔔 **มีอาจารย์ขอสมัครบัญชี SURVIMIND**\nชื่อ: " + name + (org ? "\nคณะ/หน่วยงาน: " + org : "") + "\nชื่อผู้ใช้: `" + u + "`" + (note ? "\nหมายเหตุ: " + note : "") + "\nอนุมัติได้ที่ ห้องอาจารย์ → ข้อ 7 บัญชีอาจารย์ (https://survimind.github.io/survimind/)");
     return json({ ok: true, status: "pending" }, 200, cors);
   }
   const me = body.token ? await verifyToken(String(body.token), env) : null;
