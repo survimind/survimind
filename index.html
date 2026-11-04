@@ -10372,23 +10372,25 @@ function RadarBlip({ size = 40 }) {
 /* ===== ระบบนำร่องเล่น (สอนครั้งแรกครั้งเดียว) =====
    แสดงก่อนเริ่มข้อ 1 สำหรับผู้เล่นที่ยังไม่เคยเล่น (จำไว้ในเบราว์เซอร์) · ไม่นับเวลาในข้อมูลพฤติกรรม เพราะเกมยังไม่เริ่มจับเวลา */
 // สอนวิธีเล่นแยกตามสถานการณ์: เล่นซอมบี้มาแล้ว เข้าหลงป่า/สึนามิครั้งแรกก็ยังได้ดูวิธีเล่นของสถานการณ์นั้น
-const TOUR_KEY = "zs_tour_done_v2";
+const TOUR_KEY = "zs_tour_done_v3";   // v3: เพิ่มคำอธิบายเรื่องเวลา (ผู้เล่นจริงรู้สึกกดดัน)
 const tourSeen = () => { try { return localStorage.getItem(TOUR_KEY + "_" + ACTIVE_SCENARIO) === "1"; } catch (e) { return false; } };
 const tourMark = () => { try { localStorage.setItem(TOUR_KEY + "_" + ACTIVE_SCENARIO, "1"); } catch (e) {} };
 function tourSteps(scen) {
   const forest = scen === "forest", disaster = scen === "disaster";
   return [
-    { id: null, icon: "compass", title: "ยินดีต้อนรับสู่ภารกิจเอาตัวรอด!", body: "ก่อนเริ่ม มาดูวิธีเล่นสั้น ๆ กันก่อน ใช้เวลาไม่ถึง 1 นาที" },
+    { id: null, icon: "compass", title: "ยินดีต้อนรับสู่ภารกิจเอาตัวรอด!", body: "ก่อนเริ่ม มาดูวิธีเล่นสั้น ๆ กันก่อน ใช้เวลาไม่ถึง 1 นาที · ทุกข้อไม่มีถูกผิด และไม่ต้องรีบ" },
     { id: "scene-box", icon: "film", title: "ภาพสถานการณ์", body: "ดูว่าทีมอยู่ที่ไหนและกำลังเจออะไร ภาพจะเปลี่ยนไปตามเรื่องราวในแต่ละข้อ" },
     { id: "dialogue-box", icon: "message-square-text", title: "เรื่องราวและคำถาม", body: "คำถามจะขึ้นตรงนี้พร้อมเสียงอ่าน แตะกล่องนี้ถ้าอยากให้ข้อความขึ้นครบทันที" },
     { id: "options-grid", icon: "list-checks", title: "เลือกสิ่งที่ \"คุณ\" จะทำจริง ๆ", body: "แตะตัวเลือกที่ใช่ แล้วกดยืนยัน เปลี่ยนใจได้ก่อนยืนยัน ไม่มีคำตอบถูกหรือผิด ตอบตามที่เป็นตัวเองที่สุด" },
+    { id: null, icon: "timer-off", title: "คำถามหลักไม่มีหมดเวลา", body: "• อ่านให้ครบได้ตามสบาย ข้อความยาวก็ไม่ต้องรีบ\n• ตอบเร็วหรือช้า ไม่มีผลต่อการรอดชีวิต และไม่เปลี่ยนบุคลิก 4 ตัวอักษร\n• ระบบแค่บันทึกเวลาไว้บอกสไตล์ เช่น สายลุยฉับไว หรือสายคิดรอบคอบ ไม่มีแบบไหนดีกว่ากัน\n• " + (forest ? "ลังเลนาน หมอกจะหนาขึ้น" : disaster ? "ลังเลนาน น้ำจะขึ้นใกล้" : "ลังเลนาน ซอมบี้จะเข้ามาใกล้") + " เป็นแค่บรรยากาศ ไม่มีผลอะไร" },
+    { id: null, icon: "siren", title: "จับเวลาเฉพาะด่านเร่งด่วน", body: "• มีป๊อปอัพ \"เหตุการณ์เร่งด่วน!\" เตือนก่อนเสมอ แล้วให้อ่านอีก 3 วินาทีก่อนเริ่มนับ\n• มีเวลา " + (forest || disaster ? HAZ_MS / 1000 + " วินาที เลือกของในเป้" : QTE_MS / 1000 + " วินาที (ซอมบี้จู่โจม) หรือ " + HAZ_MS / 1000 + " วินาที (เลือกของในเป้)") + "\n• ผลมีแค่กับสภาพทีม (พลังชีวิต ความเครียด) ไม่มีผลกับบุคลิก\n• หมดเวลาก็เล่นต่อได้ ไม่มีแพ้" },
     { id: "squad-panel", icon: "activity", title: "สภาพของทีม", body: "Health (การดูแลตัวเอง) · " + (forest || disaster ? "Danger" : "Infection") + " (การกล้าเสี่ยง) · Panic (ความเครียด) เปลี่ยนตามการตัดสินใจของคุณ ถ้าค่าข้ามเกณฑ์จะเกิดสถานะ เช่น บาดเจ็บ หรือตื่นตระหนก ซึ่งมีผลต่อเกมและตอนจบ" },
     { id: "belt-panel", icon: "backpack", title: "ไอเทมในเป้", body: "แตะไอเทมเพื่อใช้คู่กับคำตอบข้อนั้น หรือมอบให้เพื่อนที่กำลังต้องการความช่วยเหลือ ระหว่างทางจะเก็บไอเทมเพิ่มได้" },
     forest
       ? { id: null, icon: "trees", title: "กติกาของป่าแห่งนี้", body: "ถ้าลังเลนาน หมอกจะค่อย ๆ หนาขึ้นรอบตัว บางฉากจะเจออันตรายกลางทาง ให้เลือกของในเป้ที่ช่วยได้มากที่สุด (เข็มทิศ ไฟฉาย ชุดปฐมพยาบาล ฯลฯ) และบางจังหวะต้องตัดสินใจภายในเวลาที่กำหนด" }
       : disaster
       ? { id: null, icon: "waves", title: "กติกาของวันที่ทะเลกลืนเมือง", body: "ถ้าลังเลนาน น้ำจะค่อย ๆ ขึ้นมาใกล้ บางฉากจะเกิดวิกฤต เช่น อาฟเตอร์ช็อก กระจกบาด หรือไฟดับ ให้เลือกของในเป้ที่ช่วยได้มากที่สุด (โทรโข่ง วิทยุมือหมุน ชุดปฐมพยาบาล ฯลฯ) เมื่อตัวละครพูด ภาพจะซูมไปที่คนนั้นพร้อมกล่องข้อความ" }
-      : { id: null, icon: "siren", title: "กติกาของมหาวิทยาลัยซอมบี้", body: "บางฉากจะมีซอมบี้จู่โจม ต้องตอบสนองภายในเวลา และถ้าลังเลนาน ซอมบี้จะค่อย ๆ เข้ามาใกล้" },
+      : { id: null, icon: "skull", title: "กติกาของมหาวิทยาลัยซอมบี้", body: "บางฉากซอมบี้จะจู่โจม (เป็นด่านเร่งด่วนตามที่อธิบายไป) และบางฉากจะเจออันตรายที่ต้องเลือกของในเป้ที่ช่วยได้มากที่สุด" },
     { id: null, icon: "flag", title: "พร้อมแล้ว ไปกันเลย!", body: "ระหว่างทางมีการสแกนความจำ ถ้าคิดไม่ออกจะมีคำใบ้ขึ้นมาช่วย เล่นจบแล้ว AI จะวิเคราะห์ตัวตนจากการตัดสินใจทั้งหมดของคุณ" },
   ];
 }
@@ -10428,14 +10430,14 @@ function TourOverlay({ step, steps, onNext, onPrev, onSkip, wide }) {
           <span className="w-9 h-9 shrink-0 flex items-center justify-center" style={{ background: "rgba(242,163,58,.15)", color: "var(--amber)" }}><Icon name={st.icon} size={18} /></span>
           <div className="min-w-0">
             <p className="f-display font-semibold leading-snug">{st.title}</p>
-            <p className="text-sm leading-relaxed mt-1" style={{ color: "var(--bone)" }}>{st.body}</p>
+            <p className="text-sm leading-relaxed mt-1 whitespace-pre-line" style={{ color: "var(--bone)" }}>{st.body}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 mr-auto">{steps.map((_, i) => <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: i === step ? "var(--amber)" : "var(--line)" }} />)}</div>
-          {!last && <button id="tour-skip" onClick={onSkip} className="text-xs px-2 h-8" style={{ color: "var(--dim)" }}>ข้ามคำแนะนำ</button>}
-          {step > 0 && <button id="tour-prev" onClick={onPrev} className="text-xs px-3 h-8 border" style={{ borderColor: "var(--line)" }}>ย้อนกลับ</button>}
-          <button id="tour-next" onClick={onNext} className="text-xs px-3 h-8 font-semibold" style={{ background: "var(--amber)", color: "#111311" }}>{last ? "เริ่มเลย!" : "ถัดไป"}</button>
+          <div className="flex flex-wrap gap-1 mr-auto min-w-0">{steps.map((_, i) => <span key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: i === step ? "var(--amber)" : "var(--line)" }} />)}</div>
+          {!last && <button id="tour-skip" onClick={onSkip} className="text-xs px-2 h-8 whitespace-nowrap" style={{ color: "var(--dim)" }}>ข้าม</button>}
+          {step > 0 && <button id="tour-prev" onClick={onPrev} className="text-xs px-3 h-8 border whitespace-nowrap" style={{ borderColor: "var(--line)" }}>ย้อนกลับ</button>}
+          <button id="tour-next" onClick={onNext} className="text-xs px-3 h-8 font-semibold whitespace-nowrap" style={{ background: "var(--amber)", color: "#111311" }}>{last ? "เริ่มเลย!" : "ถัดไป"}</button>
         </div>
       </motion.div>
     </div>
