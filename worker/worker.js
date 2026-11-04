@@ -15,6 +15,7 @@
  *   TEACHER_KEY      (Secret, สำหรับห้องอาจารย์) รหัสที่อาจารย์ใช้ดูผลของนักศึกษา
  *   SESSIONS         (KV namespace binding, สำหรับห้องอาจารย์) ที่เก็บผลการเล่นของนักศึกษา
  *   EDITOR_ACCOUNTS  (Secret, สำหรับเข้าสู่ระบบทีม) บัญชี ชื่อผู้ใช้:รหัสผ่าน คั่นหลายบัญชีด้วยจุลภาค
+ *   TEACHER_ACCOUNTS (Secret, ไม่บังคับ) บัญชีอาจารย์รายคน รูปแบบเดียวกัน · เห็นเฉพาะห้องเรียนที่ตัวเองสร้าง
  *                    เช่น  admin:รหัสยาวๆ,teacher:อีกรหัส  (เปลี่ยนค่านี้ = ทุกคนต้องเข้าสู่ระบบใหม่)
  *
  * ห้องอาจารย์ (mode):
@@ -79,6 +80,7 @@ export default {
 
     // ---- ห้องอาจารย์: เก็บและดูผลของนักศึกษา ----
     if (body && (body.mode === "login" || body.mode === "verify")) return editorAuth(body, env, cors);
+    if (body && ["register", "change_password", "accept_terms", "acct_list", "acct_create", "acct_set"].includes(body.mode)) return accountApi(body, env, cors);
     if (body && ["save", "list", "get", "feedback", "feedback_list", "room_info", "room_create", "room_list", "room_delete"].includes(body.mode)) return teacherApi(body, env, cors);
 
     if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
@@ -322,6 +324,19 @@ async function teacherApi(body, env, cors) {
     if (!env.TEACHER_KEY) return json({ ok: false, error: body.token ? "session_expired" : "teacher_key_missing" }, body.token ? 401 : 503, cors);
     if (!sameKey(String(body.key || ""), env.TEACHER_KEY)) { await sleep(500); return json({ ok: false, error: body.token && !body.key ? "session_expired" : "wrong_key" }, 401, cors); }
   }
+  // บทบาท: อาจารย์เห็นเฉพาะห้องของตัวเอง · ทีม/รหัสอาจารย์ (TEACHER_KEY) เห็นทุกอย่าง
+  const isAdmin = !byToken || byToken.r === "admin";
+  const me = byToken ? byToken.u : "teacher";
+  if (!isAdmin && !(await termsOk(env, me))) return json({ ok: false, error: "terms_required" }, 403, cors);   // ยังไม่ยอมรับข้อตกลงการใช้ข้อมูล
+  const myRooms = async () => {
+    const set = new Set(); let c;
+    do {
+      const page = await env.SESSIONS.list({ prefix: "r:", cursor: c, limit: 1000 });
+      page.keys.forEach((k) => { if (k.metadata && k.metadata.owner === me) set.add(k.metadata.code); });
+      c = page.list_complete ? undefined : page.cursor;
+    } while (c);
+    return set;
+  };
   if (body.mode === "room_create") {
     const name = (tStr(body.name, 60) || "").trim();
     if (!name) return json({ ok: false, error: "room_name" }, 400, cors);
@@ -341,12 +356,13 @@ async function teacherApi(body, env, cors) {
       c = page.list_complete ? undefined : page.cursor;
     } while (c && rooms.length < 2000);
     rooms.sort((a, b) => (b.t || 0) - (a.t || 0));
-    return json({ ok: true, rooms }, 200, cors);
+    return json({ ok: true, role: isAdmin ? "admin" : "teacher", rooms: isAdmin ? rooms : rooms.filter((r) => r.owner === me) }, 200, cors);
   }
   if (body.mode === "room_delete") {
     // ลบเฉพาะห้อง (ลิงก์ใช้ไม่ได้อีก) · ผลที่เล่นไปแล้วยังอยู่และยังกรองดูด้วยรหัสห้องได้
     const code = roomCode(body.code);
     if (!code) return json({ ok: false, error: "room_not_found" }, 404, cors);
+    if (!isAdmin) { const r = await env.SESSIONS.get("r:" + code, "json"); if (!r || r.owner !== me) return json({ ok: false, error: "not_your_room" }, 403, cors); }
     await env.SESSIONS.delete("r:" + code);
     return json({ ok: true }, 200, cors);
   }
@@ -354,6 +370,7 @@ async function teacherApi(body, env, cors) {
     const sid = tStr(body.sid, 40);
     if (!sid) return json({ ok: false, error: "bad_sid" }, 400, cors);
     const rec = await env.SESSIONS.get("s:" + sid, "json");
+    if (rec && !isAdmin && !(rec.room && (await myRooms()).has(rec.room))) return json({ ok: false, error: "not_found" }, 404, cors);
     return rec ? json({ ok: true, session: rec }, 200, cors) : json({ ok: false, error: "not_found" }, 404, cors);
   }
   if (body.mode === "feedback_list") {
@@ -365,8 +382,9 @@ async function teacherApi(body, env, cors) {
       c = page.list_complete ? undefined : page.cursor;
     } while (c && keys.length < 3000);
     keys.sort().reverse();
-    const vals = await Promise.all(keys.slice(0, 300).map((k) => env.SESSIONS.get(k, "json").catch(() => null)));
-    return json({ ok: true, total: keys.length, feedback: vals.filter(Boolean) }, 200, cors);
+    const vals = (await Promise.all(keys.slice(0, 300).map((k) => env.SESSIONS.get(k, "json").catch(() => null)))).filter(Boolean);
+    if (!isAdmin) { const mine = await myRooms(); const fb = vals.filter((f) => f.room && mine.has(f.room)); return json({ ok: true, role: "teacher", total: fb.length, feedback: fb }, 200, cors); }
+    return json({ ok: true, role: "admin", total: keys.length, feedback: vals }, 200, cors);
   }
   const rows = [];
   let cursor;
@@ -376,7 +394,8 @@ async function teacherApi(body, env, cors) {
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor && rows.length < 5000);
   rows.sort((a, b) => (b.t || 0) - (a.t || 0));
-  return json({ ok: true, sessions: rows }, 200, cors);
+  if (!isAdmin) { const mine = await myRooms(); return json({ ok: true, role: "teacher", sessions: rows.filter((x) => x.rm && mine.has(x.rm)) }, 200, cors); }
+  return json({ ok: true, role: "admin", sessions: rows }, 200, cors);
 }
 
 
@@ -386,35 +405,134 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const b64uText = (t) => b64u(new TextEncoder().encode(t));
 const unb64uText = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)));
+// บัญชี 2 บทบาท: EDITOR_ACCOUNTS = ทีมผู้ดูแล (เห็นทุกอย่าง) · TEACHER_ACCOUNTS = อาจารย์ (เห็นเฉพาะห้องที่ตัวเองสร้าง)
+// รูปแบบเดียวกัน "ชื่อ:รหัส,ชื่อ2:รหัส2" · ชื่อซ้ำกันสองรายการ ให้ถือเป็นทีม
+function parseAccounts(v, role) {
+  return String(v || "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean)
+    .map((x) => { const i = x.indexOf(":"); return i > 0 ? { u: x.slice(0, i).trim(), p: x.slice(i + 1).trim(), r: role } : null; }).filter((a) => a && a.u && a.p);
+}
 function accountsOf(env) {
-  return String(env.EDITOR_ACCOUNTS || "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean)
-    .map((x) => { const i = x.indexOf(":"); return i > 0 ? { u: x.slice(0, i).trim(), p: x.slice(i + 1).trim() } : null; }).filter((a) => a && a.u && a.p);
+  const admins = parseAccounts(env.EDITOR_ACCOUNTS, "admin");
+  return [...admins, ...parseAccounts(env.TEACHER_ACCOUNTS, "teacher").filter((t) => !admins.some((a) => a.u === t.u))];
 }
 async function sign(text, env) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("survimind-editor|" + env.EDITOR_ACCOUNTS), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("survimind-editor|" + (env.EDITOR_ACCOUNTS || "") + (env.TEACHER_ACCOUNTS ? "|" + env.TEACHER_ACCOUNTS : "")), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return b64u(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text)));
 }
+// ---- บัญชีอาจารย์ที่สมัครผ่านเว็บ (เก็บใน KV "a:<ชื่อผู้ใช้>") ----
+// สถานะ: pending (รอทีมอนุมัติ) · active · disabled · รหัสผ่านเก็บเป็น PBKDF2-SHA256 + salt ไม่เก็บรหัสจริง
+const PBKDF2_ITER = 20000;
+// ข้อตกลงการใช้ข้อมูลนักศึกษา (อาจารย์ต้องกดยอมรับก่อนดูผล) · เปลี่ยนเนื้อหาข้อตกลงให้เพิ่มเลขเวอร์ชัน
+const TERMS_VERSION = 1;
+async function termsOk(env, u) { try { const r = await env.SESSIONS.get("tos:" + u, "json"); return !!(r && r.v >= TERMS_VERSION); } catch { return false; } }
+const USER_RE = /^[a-z0-9_.-]{3,30}$/;
+async function hashPass(pass, saltB64) {
+  const salt = saltB64 ? Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: PBKDF2_ITER }, key, 256);
+  return { salt: btoa(String.fromCharCode(...salt)), hash: btoa(String.fromCharCode(...new Uint8Array(bits))) };
+}
+const acctMeta = (a) => ({ u: a.u, name: (a.name || "").slice(0, 60), org: (a.org || "").slice(0, 60), note: (a.note || "").slice(0, 80) || undefined, status: a.status, t: a.t });   // metadata KV จำกัด 1KB
+async function getAcct(env, u) { if (!env.SESSIONS || !u) return null; try { return await env.SESSIONS.get("a:" + u, "json"); } catch { return null; } }
+async function putAcct(env, a) { await env.SESSIONS.put("a:" + a.u, JSON.stringify(a), { metadata: acctMeta(a) }); }
+const randomPass = () => { const c = "abcdefghjkmnpqrstuvwxyz23456789"; return Array.from(crypto.getRandomValues(new Uint8Array(10)), (x) => c[x % c.length]).join(""); };
+
+// กุญแจเซ็น token มาจาก Secret ของบัญชีทีม · ไม่มี Secret = ปิดการเข้าสู่ระบบทั้งหมด (กันการปลอม token)
+const signReady = (env) => !!(env.EDITOR_ACCOUNTS || env.TEACHER_ACCOUNTS);
 async function verifyToken(token, env) {
   try {
-    if (!env.EDITOR_ACCOUNTS) return null;
+    if (!signReady(env)) return null;
     const [body, sig] = token.split(".");
     if (!body || !sig || !sameKey(sig, await sign(body, env))) return null;
     const data = JSON.parse(unb64uText(body));
     if (!data || !data.u || !(data.exp > Date.now())) return null;
-    if (!accountsOf(env).some((a) => a.u === data.u)) return null;
-    return data;
+    const acc = accountsOf(env).find((a) => a.u === data.u);
+    if (acc) return { ...data, r: acc.r, src: "env" };   // บทบาทอ่านจากบัญชีปัจจุบันเสมอ
+    const k = await getAcct(env, data.u);
+    if (k && k.status === "active" && (k.pv || 0) === (data.pv || 0)) return { ...data, r: "teacher", src: "kv" };   // เปลี่ยนรหัส/ปิดบัญชีแล้ว token เก่าใช้ไม่ได้
+    return null;
   } catch { return null; }
 }
+async function issue(acc, env, cors, extra = {}) {
+  const exp = Date.now() + TOKEN_DAYS * 864e5;
+  const payload = b64uText(JSON.stringify({ u: acc.u, exp, pv: acc.pv || 0 }));
+  return json({ ok: true, user: acc.u, name: acc.name, exp, role: acc.r || "teacher", token: payload + "." + (await sign(payload, env)), ...extra }, 200, cors);
+}
 async function editorAuth(body, env, cors) {
-  if (!env.EDITOR_ACCOUNTS) return json({ ok: false, error: "accounts_missing" }, 503, cors);
+  if (!signReady(env)) return json({ ok: false, error: "accounts_missing" }, 503, cors);
   if (body.mode === "verify") {
     const d = await verifyToken(String(body.token || ""), env);
-    return d ? json({ ok: true, user: d.u, exp: d.exp }, 200, cors) : json({ ok: false, error: "session_expired" }, 401, cors);
+    if (!d) return json({ ok: false, error: "session_expired" }, 401, cors);
+    return json({ ok: true, user: d.u, exp: d.exp, role: d.r, src: d.src, terms: d.r === "admin" ? true : await termsOk(env, d.u) }, 200, cors);
   }
-  const u = tStr(body.user, 40) || "", p = tStr(body.pass, 200) || "";
-  const acc = accountsOf(env).find((a) => sameKey(u.trim(), a.u));
-  if (!acc || !sameKey(p, acc.p)) { await sleep(700); return json({ ok: false, error: "wrong_login" }, 401, cors); }
-  const exp = Date.now() + TOKEN_DAYS * 864e5;
-  const payload = b64uText(JSON.stringify({ u: acc.u, exp }));
-  return json({ ok: true, user: acc.u, exp, token: payload + "." + (await sign(payload, env)) }, 200, cors);
+  const u = (tStr(body.user, 40) || "").trim(), p = tStr(body.pass, 200) || "";
+  const acc = accountsOf(env).find((a) => sameKey(u, a.u));
+  if (acc) { if (!sameKey(p, acc.p)) { await sleep(700); return json({ ok: false, error: "wrong_login" }, 401, cors); } return issue(acc, env, cors); }
+  const k = await getAcct(env, u.toLowerCase());
+  if (!k || !k.hash || (await hashPass(p, k.salt)).hash !== k.hash) { await sleep(700); return json({ ok: false, error: "wrong_login" }, 401, cors); }
+  if (k.status === "pending") return json({ ok: false, error: "pending" }, 403, cors);
+  if (k.status !== "active") return json({ ok: false, error: "disabled" }, 403, cors);
+  return issue({ ...k, r: "teacher" }, env, cors);
+}
+// สมัคร · เปลี่ยนรหัส · ทีมจัดการบัญชี
+async function accountApi(body, env, cors) {
+  if (!env.SESSIONS) return json({ ok: false, error: "kv_missing" }, 503, cors);
+  if (!signReady(env)) return json({ ok: false, error: "accounts_missing" }, 503, cors);
+  if (body.mode === "register") {
+    const u = (tStr(body.user, 40) || "").trim().toLowerCase(), p = tStr(body.pass, 200) || "";
+    const name = (tStr(body.name, 80) || "").trim(), org = (tStr(body.org, 120) || "").trim(), note = (tStr(body.note, 300) || "").trim();
+    if (!USER_RE.test(u)) return json({ ok: false, error: "bad_user" }, 400, cors);
+    if (p.length < 8) return json({ ok: false, error: "weak_pass" }, 400, cors);
+    if (!name) return json({ ok: false, error: "need_name" }, 400, cors);
+    if (body.consent !== true) return json({ ok: false, error: "need_consent" }, 400, cors);   // PDPA: ต้องยินยอมก่อนเก็บข้อมูลบัญชี
+    if (accountsOf(env).some((a) => a.u.toLowerCase() === u) || (await getAcct(env, u))) return json({ ok: false, error: "user_taken" }, 409, cors);
+    let pending = 0, c;
+    do { const page = await env.SESSIONS.list({ prefix: "a:", cursor: c, limit: 1000 }); pending += page.keys.filter((k) => k.metadata && k.metadata.status === "pending").length; c = page.list_complete ? undefined : page.cursor; } while (c);
+    if (pending >= 50) return json({ ok: false, error: "too_many_pending" }, 429, cors);
+    const h = await hashPass(p);
+    await putAcct(env, { u, name, org, note, status: "pending", t: Date.now(), consentAt: Date.now(), ...h, pv: 0 });
+    return json({ ok: true, status: "pending" }, 200, cors);
+  }
+  const me = body.token ? await verifyToken(String(body.token), env) : null;
+  if (!me) return json({ ok: false, error: "session_expired" }, 401, cors);
+  if (body.mode === "change_password") {
+    if (me.src !== "kv") return json({ ok: false, error: "env_account" }, 400, cors);
+    const k = await getAcct(env, me.u), np = tStr(body.newPass, 200) || "";
+    if (!k || (await hashPass(tStr(body.oldPass, 200) || "", k.salt)).hash !== k.hash) { await sleep(700); return json({ ok: false, error: "wrong_old" }, 401, cors); }
+    if (np.length < 8) return json({ ok: false, error: "weak_pass" }, 400, cors);
+    const n = { ...k, ...(await hashPass(np)), pv: (k.pv || 0) + 1 };
+    await putAcct(env, n);
+    return issue({ ...n, r: "teacher" }, env, cors);   // token ใหม่ (token เก่าทุกเครื่องหมดอายุ)
+  }
+  if (body.mode === "accept_terms") {
+    await env.SESSIONS.put("tos:" + me.u, JSON.stringify({ u: me.u, v: TERMS_VERSION, t: Date.now() }));
+    return json({ ok: true }, 200, cors);
+  }
+  if (me.r !== "admin") return json({ ok: false, error: "admin_only" }, 403, cors);
+  if (body.mode === "acct_list") {
+    const out = []; let c;
+    do { const page = await env.SESSIONS.list({ prefix: "a:", cursor: c, limit: 1000 }); page.keys.forEach((k) => out.push(k.metadata || { u: k.name.slice(2) })); c = page.list_complete ? undefined : page.cursor; } while (c);
+    out.sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || (b.t || 0) - (a.t || 0));
+    return json({ ok: true, accounts: out, envTeachers: parseAccounts(env.TEACHER_ACCOUNTS, "teacher").map((a) => a.u) }, 200, cors);
+  }
+  if (body.mode === "acct_create") {
+    const u = (tStr(body.user, 40) || "").trim().toLowerCase(), name = (tStr(body.name, 80) || "").trim(), org = (tStr(body.org, 120) || "").trim();
+    if (!USER_RE.test(u)) return json({ ok: false, error: "bad_user" }, 400, cors);
+    if (!name) return json({ ok: false, error: "need_name" }, 400, cors);
+    if (accountsOf(env).some((a) => a.u.toLowerCase() === u) || (await getAcct(env, u))) return json({ ok: false, error: "user_taken" }, 409, cors);
+    const temp = randomPass();
+    await putAcct(env, { u, name, org, status: "active", t: Date.now(), by: me.u, ...(await hashPass(temp)), pv: 0 });
+    return json({ ok: true, user: u, tempPass: temp }, 200, cors);   // แสดงครั้งเดียวให้ทีมส่งให้อาจารย์
+  }
+  if (body.mode === "acct_set") {
+    const u = (tStr(body.user, 40) || "").trim().toLowerCase(), k = await getAcct(env, u);
+    if (!k) return json({ ok: false, error: "not_found" }, 404, cors);
+    const act = body.action;
+    if (act === "delete") { await env.SESSIONS.delete("a:" + u); return json({ ok: true }, 200, cors); }
+    if (act === "approve" || act === "enable") { await putAcct(env, { ...k, status: "active", by: me.u }); return json({ ok: true }, 200, cors); }
+    if (act === "disable") { await putAcct(env, { ...k, status: "disabled", pv: (k.pv || 0) + 1 }); return json({ ok: true }, 200, cors); }
+    if (act === "reset") { const temp = randomPass(); await putAcct(env, { ...k, ...(await hashPass(temp)), pv: (k.pv || 0) + 1, status: k.status === "pending" ? "active" : k.status }); return json({ ok: true, tempPass: temp }, 200, cors); }
+    return json({ ok: false, error: "bad_action" }, 400, cors);
+  }
+  return json({ ok: false, error: "bad_mode" }, 400, cors);
 }
