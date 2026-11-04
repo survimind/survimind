@@ -80,6 +80,7 @@ export default {
 
     // ---- ห้องอาจารย์: เก็บและดูผลของนักศึกษา ----
     if (body && (body.mode === "login" || body.mode === "verify")) return editorAuth(body, env, cors);
+    if (body && ["register", "change_password", "acct_list", "acct_create", "acct_set"].includes(body.mode)) return accountApi(body, env, cors);
     if (body && ["save", "list", "get", "feedback", "feedback_list", "room_info", "room_create", "room_list", "room_delete"].includes(body.mode)) return teacherApi(body, env, cors);
 
     if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
@@ -417,28 +418,111 @@ async function sign(text, env) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("survimind-editor|" + (env.EDITOR_ACCOUNTS || "") + (env.TEACHER_ACCOUNTS ? "|" + env.TEACHER_ACCOUNTS : "")), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return b64u(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text)));
 }
+// ---- บัญชีอาจารย์ที่สมัครผ่านเว็บ (เก็บใน KV "a:<ชื่อผู้ใช้>") ----
+// สถานะ: pending (รอทีมอนุมัติ) · active · disabled · รหัสผ่านเก็บเป็น PBKDF2-SHA256 + salt ไม่เก็บรหัสจริง
+const PBKDF2_ITER = 20000;
+const USER_RE = /^[a-z0-9_.-]{3,30}$/;
+async function hashPass(pass, saltB64) {
+  const salt = saltB64 ? Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: PBKDF2_ITER }, key, 256);
+  return { salt: btoa(String.fromCharCode(...salt)), hash: btoa(String.fromCharCode(...new Uint8Array(bits))) };
+}
+const acctMeta = (a) => ({ u: a.u, name: (a.name || "").slice(0, 60), org: (a.org || "").slice(0, 60), note: (a.note || "").slice(0, 80) || undefined, status: a.status, t: a.t });   // metadata KV จำกัด 1KB
+async function getAcct(env, u) { if (!env.SESSIONS || !u) return null; try { return await env.SESSIONS.get("a:" + u, "json"); } catch { return null; } }
+async function putAcct(env, a) { await env.SESSIONS.put("a:" + a.u, JSON.stringify(a), { metadata: acctMeta(a) }); }
+const randomPass = () => { const c = "abcdefghjkmnpqrstuvwxyz23456789"; return Array.from(crypto.getRandomValues(new Uint8Array(10)), (x) => c[x % c.length]).join(""); };
+
+// กุญแจเซ็น token มาจาก Secret ของบัญชีทีม · ไม่มี Secret = ปิดการเข้าสู่ระบบทั้งหมด (กันการปลอม token)
+const signReady = (env) => !!(env.EDITOR_ACCOUNTS || env.TEACHER_ACCOUNTS);
 async function verifyToken(token, env) {
   try {
-    if (!env.EDITOR_ACCOUNTS && !env.TEACHER_ACCOUNTS) return null;
+    if (!signReady(env)) return null;
     const [body, sig] = token.split(".");
     if (!body || !sig || !sameKey(sig, await sign(body, env))) return null;
     const data = JSON.parse(unb64uText(body));
     if (!data || !data.u || !(data.exp > Date.now())) return null;
     const acc = accountsOf(env).find((a) => a.u === data.u);
-    if (!acc) return null;
-    return { ...data, r: acc.r };   // บทบาทอ่านจากบัญชีปัจจุบันเสมอ (ย้ายจากทีมเป็นอาจารย์แล้วมีผลทันที)
+    if (acc) return { ...data, r: acc.r, src: "env" };   // บทบาทอ่านจากบัญชีปัจจุบันเสมอ
+    const k = await getAcct(env, data.u);
+    if (k && k.status === "active" && (k.pv || 0) === (data.pv || 0)) return { ...data, r: "teacher", src: "kv" };   // เปลี่ยนรหัส/ปิดบัญชีแล้ว token เก่าใช้ไม่ได้
+    return null;
   } catch { return null; }
 }
+async function issue(acc, env, cors, extra = {}) {
+  const exp = Date.now() + TOKEN_DAYS * 864e5;
+  const payload = b64uText(JSON.stringify({ u: acc.u, exp, pv: acc.pv || 0 }));
+  return json({ ok: true, user: acc.u, name: acc.name, exp, role: acc.r || "teacher", token: payload + "." + (await sign(payload, env)), ...extra }, 200, cors);
+}
 async function editorAuth(body, env, cors) {
-  if (!env.EDITOR_ACCOUNTS && !env.TEACHER_ACCOUNTS) return json({ ok: false, error: "accounts_missing" }, 503, cors);
+  if (!signReady(env)) return json({ ok: false, error: "accounts_missing" }, 503, cors);
   if (body.mode === "verify") {
     const d = await verifyToken(String(body.token || ""), env);
-    return d ? json({ ok: true, user: d.u, exp: d.exp, role: d.r }, 200, cors) : json({ ok: false, error: "session_expired" }, 401, cors);
+    return d ? json({ ok: true, user: d.u, exp: d.exp, role: d.r, src: d.src }, 200, cors) : json({ ok: false, error: "session_expired" }, 401, cors);
   }
-  const u = tStr(body.user, 40) || "", p = tStr(body.pass, 200) || "";
-  const acc = accountsOf(env).find((a) => sameKey(u.trim(), a.u));
-  if (!acc || !sameKey(p, acc.p)) { await sleep(700); return json({ ok: false, error: "wrong_login" }, 401, cors); }
-  const exp = Date.now() + TOKEN_DAYS * 864e5;
-  const payload = b64uText(JSON.stringify({ u: acc.u, exp }));
-  return json({ ok: true, user: acc.u, exp, role: acc.r, token: payload + "." + (await sign(payload, env)) }, 200, cors);
+  const u = (tStr(body.user, 40) || "").trim(), p = tStr(body.pass, 200) || "";
+  const acc = accountsOf(env).find((a) => sameKey(u, a.u));
+  if (acc) { if (!sameKey(p, acc.p)) { await sleep(700); return json({ ok: false, error: "wrong_login" }, 401, cors); } return issue(acc, env, cors); }
+  const k = await getAcct(env, u.toLowerCase());
+  if (!k || !k.hash || (await hashPass(p, k.salt)).hash !== k.hash) { await sleep(700); return json({ ok: false, error: "wrong_login" }, 401, cors); }
+  if (k.status === "pending") return json({ ok: false, error: "pending" }, 403, cors);
+  if (k.status !== "active") return json({ ok: false, error: "disabled" }, 403, cors);
+  return issue({ ...k, r: "teacher" }, env, cors);
+}
+// สมัคร · เปลี่ยนรหัส · ทีมจัดการบัญชี
+async function accountApi(body, env, cors) {
+  if (!env.SESSIONS) return json({ ok: false, error: "kv_missing" }, 503, cors);
+  if (!signReady(env)) return json({ ok: false, error: "accounts_missing" }, 503, cors);
+  if (body.mode === "register") {
+    const u = (tStr(body.user, 40) || "").trim().toLowerCase(), p = tStr(body.pass, 200) || "";
+    const name = (tStr(body.name, 80) || "").trim(), org = (tStr(body.org, 120) || "").trim(), note = (tStr(body.note, 300) || "").trim();
+    if (!USER_RE.test(u)) return json({ ok: false, error: "bad_user" }, 400, cors);
+    if (p.length < 8) return json({ ok: false, error: "weak_pass" }, 400, cors);
+    if (!name) return json({ ok: false, error: "need_name" }, 400, cors);
+    if (accountsOf(env).some((a) => a.u.toLowerCase() === u) || (await getAcct(env, u))) return json({ ok: false, error: "user_taken" }, 409, cors);
+    let pending = 0, c;
+    do { const page = await env.SESSIONS.list({ prefix: "a:", cursor: c, limit: 1000 }); pending += page.keys.filter((k) => k.metadata && k.metadata.status === "pending").length; c = page.list_complete ? undefined : page.cursor; } while (c);
+    if (pending >= 50) return json({ ok: false, error: "too_many_pending" }, 429, cors);
+    const h = await hashPass(p);
+    await putAcct(env, { u, name, org, note, status: "pending", t: Date.now(), ...h, pv: 0 });
+    return json({ ok: true, status: "pending" }, 200, cors);
+  }
+  const me = body.token ? await verifyToken(String(body.token), env) : null;
+  if (!me) return json({ ok: false, error: "session_expired" }, 401, cors);
+  if (body.mode === "change_password") {
+    if (me.src !== "kv") return json({ ok: false, error: "env_account" }, 400, cors);
+    const k = await getAcct(env, me.u), np = tStr(body.newPass, 200) || "";
+    if (!k || (await hashPass(tStr(body.oldPass, 200) || "", k.salt)).hash !== k.hash) { await sleep(700); return json({ ok: false, error: "wrong_old" }, 401, cors); }
+    if (np.length < 8) return json({ ok: false, error: "weak_pass" }, 400, cors);
+    const n = { ...k, ...(await hashPass(np)), pv: (k.pv || 0) + 1 };
+    await putAcct(env, n);
+    return issue({ ...n, r: "teacher" }, env, cors);   // token ใหม่ (token เก่าทุกเครื่องหมดอายุ)
+  }
+  if (me.r !== "admin") return json({ ok: false, error: "admin_only" }, 403, cors);
+  if (body.mode === "acct_list") {
+    const out = []; let c;
+    do { const page = await env.SESSIONS.list({ prefix: "a:", cursor: c, limit: 1000 }); page.keys.forEach((k) => out.push(k.metadata || { u: k.name.slice(2) })); c = page.list_complete ? undefined : page.cursor; } while (c);
+    out.sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || (b.t || 0) - (a.t || 0));
+    return json({ ok: true, accounts: out, envTeachers: parseAccounts(env.TEACHER_ACCOUNTS, "teacher").map((a) => a.u) }, 200, cors);
+  }
+  if (body.mode === "acct_create") {
+    const u = (tStr(body.user, 40) || "").trim().toLowerCase(), name = (tStr(body.name, 80) || "").trim(), org = (tStr(body.org, 120) || "").trim();
+    if (!USER_RE.test(u)) return json({ ok: false, error: "bad_user" }, 400, cors);
+    if (!name) return json({ ok: false, error: "need_name" }, 400, cors);
+    if (accountsOf(env).some((a) => a.u.toLowerCase() === u) || (await getAcct(env, u))) return json({ ok: false, error: "user_taken" }, 409, cors);
+    const temp = randomPass();
+    await putAcct(env, { u, name, org, status: "active", t: Date.now(), by: me.u, ...(await hashPass(temp)), pv: 0 });
+    return json({ ok: true, user: u, tempPass: temp }, 200, cors);   // แสดงครั้งเดียวให้ทีมส่งให้อาจารย์
+  }
+  if (body.mode === "acct_set") {
+    const u = (tStr(body.user, 40) || "").trim().toLowerCase(), k = await getAcct(env, u);
+    if (!k) return json({ ok: false, error: "not_found" }, 404, cors);
+    const act = body.action;
+    if (act === "delete") { await env.SESSIONS.delete("a:" + u); return json({ ok: true }, 200, cors); }
+    if (act === "approve" || act === "enable") { await putAcct(env, { ...k, status: "active", by: me.u }); return json({ ok: true }, 200, cors); }
+    if (act === "disable") { await putAcct(env, { ...k, status: "disabled", pv: (k.pv || 0) + 1 }); return json({ ok: true }, 200, cors); }
+    if (act === "reset") { const temp = randomPass(); await putAcct(env, { ...k, ...(await hashPass(temp)), pv: (k.pv || 0) + 1, status: k.status === "pending" ? "active" : k.status }); return json({ ok: true, tempPass: temp }, 200, cors); }
+    return json({ ok: false, error: "bad_action" }, 400, cors);
+  }
+  return json({ ok: false, error: "bad_mode" }, 400, cors);
 }

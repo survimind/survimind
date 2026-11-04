@@ -4729,13 +4729,158 @@ const ABOUT_SAFE = [
    เปิดได้เฉพาะลิงก์ ?teacher หรือ ?editor · ดูผลลัพธ์ตัวอย่างได้ทันทีโดยไม่ต้องกรอกข้อมูลหรือเล่นเกม
    ผลตัวอย่างมาจากการเล่นจริงครบ 10 ข้อ 3 รอบ (คนละสไตล์) เก็บไว้ใน TEACHER_SAMPLES */
 const isTeacherLink = () => !!editorSession();
-const LOGIN_ERR = { wrong_login: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", accounts_missing: "ยังไม่ได้ตั้งบัญชีทีม (EDITOR_ACCOUNTS) ใน Cloudflare", offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง", no_endpoint: "ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์" };
+const LOGIN_ERR = { wrong_login: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", accounts_missing: "ยังไม่ได้ตั้งบัญชีทีม (EDITOR_ACCOUNTS) ใน Cloudflare", offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง", no_endpoint: "ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์" , pending: "บัญชีนี้ยังรอทีมอนุมัติ ลองใหม่หลังได้รับแจ้ง", disabled: "บัญชีนี้ถูกปิดใช้งาน ติดต่อทีมผู้ดูแล" };
+const ACCT_ERR = { bad_user: "ชื่อผู้ใช้ใช้ได้เฉพาะ a-z 0-9 _ . - ยาว 3–30 ตัว", weak_pass: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัว", need_name: "กรอกชื่อ-นามสกุล", user_taken: "ชื่อผู้ใช้นี้มีคนใช้แล้ว",
+  too_many_pending: "มีคำขอรออนุมัติจำนวนมาก ลองใหม่ภายหลัง", wrong_old: "รหัสผ่านเดิมไม่ถูกต้อง", env_account: "บัญชีนี้ตั้งโดยทีมใน Cloudflare เปลี่ยนรหัสผ่านได้ที่ทีมผู้ดูแล",
+  admin_only: "เฉพาะทีมผู้ดูแล", session_expired: "การเข้าสู่ระบบหมดอายุ กรุณาเข้าใหม่", offline: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้", accounts_missing: "ระบบบัญชียังไม่ได้ตั้งค่าใน Cloudflare", kv_missing: "ยังไม่ได้เชื่อมที่เก็บข้อมูล (KV)" };
+const acctErr = (r) => ACCT_ERR[r && r.error] || "ทำรายการไม่สำเร็จ (" + ((r && r.error) || "unknown") + ")";
+const inputCls = "px-3 py-2 text-base border min-w-0";
+const inputSty = { borderColor: "var(--line)", background: "var(--panel-2)", color: "var(--bone)" };
+// อาจารย์ขอสมัครเอง → สถานะรออนุมัติ → ทีมกดอนุมัติในห้องอาจารย์
+function RegisterScreen({ onBack }) {
+  const [f, setF] = useState({ name: "", org: "", user: "", pass: "", pass2: "", note: "" });
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [sent, setSent] = useState(false);
+  const set = (k) => (e) => setF({ ...f, [k]: k === "user" ? e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "") : e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    if (f.pass !== f.pass2) { setErr("รหัสผ่านสองช่องไม่ตรงกัน"); return; }
+    setBusy(true); setErr("");
+    const r = await STORE.teacherCall({ mode: "register", name: f.name, org: f.org, user: f.user, pass: f.pass, note: f.note });
+    setBusy(false);
+    if (!r || !r.ok) { setErr(acctErr(r)); return; }
+    setSent(true);
+  };
+  const field = (k, label, props = {}) => (
+    <label className="flex flex-col gap-1 text-sm">{label}
+      <input id={"reg-" + k} value={f[k]} onChange={set(k)} className={inputCls} style={inputSty} {...props} />
+    </label>
+  );
+  return (
+    <div className="h-full flex flex-col grid-bg">
+      <NavBar onBack={onBack} backLabel="เข้าสู่ระบบ" />
+      <div className="flex-1 min-h-0 overflow-y-auto scroll-thin flex items-center justify-center py-8">
+        {sent ? (
+          <div id="reg-sent" className="w-full max-w-sm flex flex-col gap-3 p-6 border" style={{ borderColor: "var(--green)", background: "var(--panel)" }}>
+            <span style={{ color: "var(--green)" }}><Icon name="mail-check" size={28} /></span>
+            <h1 className="f-display font-bold text-2xl">ส่งคำขอแล้ว</h1>
+            <p className="text-sm leading-relaxed">ทีม SURVIMIND จะตรวจและอนุมัติบัญชี <b className="f-mono">{f.user}</b> เมื่ออนุมัติแล้วเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านที่ตั้งไว้ได้ทันที</p>
+            <TacButton id="reg-back" icon="log-in" onClick={onBack}>กลับไปหน้าเข้าสู่ระบบ</TacButton>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="w-full max-w-md flex flex-col gap-3 p-6 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+            <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--green)" }}><Icon name="user-plus" size={14} />Teacher sign-up</span>
+            <h1 className="f-display font-bold text-2xl">ขอสมัครบัญชีอาจารย์</h1>
+            <p className="text-sm" style={{ color: "var(--dim)" }}>บัญชีอาจารย์สร้างห้องเรียนและดูผลเฉพาะห้องของตัวเอง ใช้ได้หลังทีมอนุมัติ</p>
+            {field("name", "ชื่อ-นามสกุล", { autoComplete: "name", maxLength: 80 })}
+            {field("org", "คณะ / หน่วยงาน", { autoComplete: "organization", maxLength: 120 })}
+            {field("user", "ชื่อผู้ใช้ (a-z 0-9 _ . -)", { autoComplete: "username", autoCapitalize: "none", spellCheck: false, maxLength: 30 })}
+            {field("pass", "รหัสผ่าน (อย่างน้อย 8 ตัว)", { type: "password", autoComplete: "new-password" })}
+            {field("pass2", "ยืนยันรหัสผ่าน", { type: "password", autoComplete: "new-password" })}
+            {field("note", "หมายเหตุถึงทีม (ไม่บังคับ) เช่น รายวิชาที่จะใช้", { maxLength: 300 })}
+            {err && <p id="reg-err" className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
+            <button id="reg-submit" type="submit" disabled={busy} className="cut f-display font-semibold inline-flex items-center justify-center gap-2 px-6 py-3" style={{ background: busy ? "var(--panel-2)" : "var(--green)", color: busy ? "var(--dim)" : "#111311" }}><Icon name="send" size={18} />{busy ? "กำลังส่ง…" : "ส่งคำขอสมัคร"}</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+// อาจารย์เปลี่ยนรหัสผ่านเอง
+function MyAccount() {
+  const ses = editorSession();
+  const [f, setF] = useState({ old: "", n1: "", n2: "" });
+  const [busy, setBusy] = useState(false), [msg, setMsg] = useState(null);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (f.n1 !== f.n2) { setMsg({ err: true, t: "รหัสผ่านใหม่สองช่องไม่ตรงกัน" }); return; }
+    setBusy(true); setMsg(null);
+    const r = await STORE.teacherCall({ mode: "change_password", token: ses.token, oldPass: f.old, newPass: f.n1 });
+    setBusy(false);
+    if (!r || !r.ok) { setMsg({ err: true, t: acctErr(r) }); return; }
+    try { localStorage.setItem(EDITOR_SESSION_KEY, JSON.stringify({ ...ses, token: r.token, exp: r.exp })); } catch (er) {}
+    setF({ old: "", n1: "", n2: "" }); setMsg({ err: false, t: "เปลี่ยนรหัสผ่านแล้ว เครื่องอื่นที่เคยเข้าสู่ระบบจะต้องเข้าใหม่" });
+  };
+  const inp = (k, label) => <label className="flex flex-col gap-1 text-sm flex-1 min-w-[180px]">{label}<input id={"pw-" + k} type="password" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className={inputCls} style={inputSty} autoComplete={k === "old" ? "current-password" : "new-password"} /></label>;
+  return (
+    <form id="my-account" onSubmit={submit} className="flex flex-col gap-3 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+      <span className="text-sm" style={{ color: "var(--dim)" }}>บัญชี <b style={{ color: "var(--bone)" }}>{ses && ses.user}</b> · เปลี่ยนรหัสผ่าน</span>
+      <div className="flex flex-wrap gap-3">{inp("old", "รหัสผ่านเดิม")}{inp("n1", "รหัสผ่านใหม่ (8 ตัวขึ้นไป)")}{inp("n2", "ยืนยันรหัสผ่านใหม่")}</div>
+      <div className="flex flex-wrap items-center gap-3">
+        <TacButton id="pw-submit" icon="key-round" tone="green" disabled={busy}>{busy ? "กำลังบันทึก…" : "เปลี่ยนรหัสผ่าน"}</TacButton>
+        {msg && <span id="pw-msg" className="text-sm" style={{ color: msg.err ? "var(--red)" : "var(--green)" }}>{msg.t}</span>}
+      </div>
+    </form>
+  );
+}
+// ทีมผู้ดูแล: อนุมัติคำขอ สร้าง/ปิด/รีเซ็ต/ลบบัญชีอาจารย์
+const ACCT_STATUS = { pending: ["รออนุมัติ", "var(--amber)"], active: ["ใช้งานได้", "var(--green)"], disabled: ["ปิดใช้งาน", "var(--dim)"] };
+function AccountAdmin() {
+  const ses = editorSession();
+  const [list, setList] = useState(null), [env, setEnv] = useState([]);
+  const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [temp, setTemp] = useState(null), [confirmDel, setConfirmDel] = useState("");
+  const [nf, setNf] = useState({ user: "", name: "", org: "" });
+  const call = async (body, tag) => { setBusy(tag || "x"); setErr(""); const r = await STORE.teacherCall({ ...body, token: ses.token }); setBusy(""); if (!r || !r.ok) { setErr(acctErr(r)); return null; } return r; };
+  const load = async () => { const r = await call({ mode: "acct_list" }, "load"); if (r) { setList(r.accounts || []); setEnv(r.envTeachers || []); } };
+  useEffect(() => { load(); }, []);
+  const act = async (u, action) => { const r = await call({ mode: "acct_set", user: u, action }, u + action); if (r) { if (r.tempPass) setTemp({ user: u, pass: r.tempPass }); setConfirmDel(""); load(); } };
+  const create = async (e) => { e.preventDefault(); const r = await call({ mode: "acct_create", ...nf }, "create"); if (r) { setTemp({ user: r.user, pass: r.tempPass }); setNf({ user: "", name: "", org: "" }); load(); } };
+  const fmt = (t) => { try { return new Date(t).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } };
+  const pend = (list || []).filter((a) => a.status === "pending").length;
+  const btn = (label, onClick, color = "var(--line)", id) => <button id={id} onClick={onClick} disabled={!!busy} className="px-2.5 py-1 text-xs border whitespace-nowrap" style={{ borderColor: color, color: color === "var(--line)" ? "var(--bone)" : color }}>{label}</button>;
+  return (
+    <div id="acct-admin" className="flex flex-col gap-3">
+      {temp && (
+        <div id="acct-temp" className="flex flex-wrap items-center gap-3 p-4 border" style={{ borderColor: "var(--amber)", background: "rgba(242,163,58,.08)" }}>
+          <Icon name="key-round" size={18} />
+          <span className="flex-1 min-w-[220px] text-sm">รหัสผ่านชั่วคราวของ <b className="f-mono">{temp.user}</b>: <b className="f-mono text-lg" style={{ color: "var(--amber)" }}>{temp.pass}</b><br /><span style={{ color: "var(--dim)" }}>แสดงครั้งเดียว ส่งให้อาจารย์ทางช่องทางส่วนตัว แล้วให้อาจารย์เปลี่ยนรหัสผ่านเองหลังเข้าสู่ระบบ</span></span>
+          <button onClick={() => setTemp(null)} className="px-3 py-1.5 text-sm border" style={{ borderColor: "var(--line)" }}>ปิด</button>
+        </div>
+      )}
+      <form onSubmit={create} className="flex flex-wrap items-end gap-2 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
+        <span className="w-full text-sm" style={{ color: "var(--dim)" }}>สร้างบัญชีอาจารย์ให้เลย (ระบบสุ่มรหัสผ่านชั่วคราวให้)</span>
+        <input id="acct-new-user" placeholder="ชื่อผู้ใช้" value={nf.user} onChange={(e) => setNf({ ...nf, user: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, "") })} className={inputCls} style={{ ...inputSty, width: 160 }} />
+        <input id="acct-new-name" placeholder="ชื่อ-นามสกุล" value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} className={inputCls} style={{ ...inputSty, flex: 1, minWidth: 160 }} />
+        <input id="acct-new-org" placeholder="คณะ / หน่วยงาน" value={nf.org} onChange={(e) => setNf({ ...nf, org: e.target.value })} className={inputCls} style={{ ...inputSty, flex: 1, minWidth: 140 }} />
+        <TacButton id="acct-create" icon="user-plus" tone="green" disabled={!!busy}>สร้างบัญชี</TacButton>
+      </form>
+      <div className="flex items-center gap-3 text-sm">
+        <span style={{ color: "var(--dim)" }}>{list ? "บัญชีอาจารย์ " + list.length + " บัญชี" + (pend ? " · รออนุมัติ " + pend : "") : "กำลังโหลด…"}</span>
+        <button onClick={load} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border" style={{ borderColor: "var(--line)" }}><Icon name="refresh-cw" size={12} />โหลดใหม่</button>
+      </div>
+      {err && <p className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
+      {list && list.length > 0 && (
+        <div className="overflow-x-auto border" style={{ borderColor: "var(--line)" }}>
+          <table className="w-full text-sm" style={{ minWidth: 760 }}>
+            <thead><tr style={{ background: "var(--panel-2)", color: "var(--dim)" }}>{["ชื่อผู้ใช้", "ชื่อ · หน่วยงาน", "สถานะ", "ขอ/สร้างเมื่อ", ""].map((h) => <th key={h} className="text-left font-normal px-3 py-2">{h}</th>)}</tr></thead>
+            <tbody>{list.map((a) => { const [st, col] = ACCT_STATUS[a.status] || [a.status, "var(--dim)"]; return (
+              <tr key={a.u} id={"acct-" + a.u} className="border-t" style={{ borderColor: "var(--line)" }}>
+                <td className="px-3 py-2 f-mono">{a.u}</td>
+                <td className="px-3 py-2">{a.name || "–"}{a.org ? <span style={{ color: "var(--dim)" }}> · {a.org}</span> : null}{a.note ? <span className="block text-xs" style={{ color: "var(--dim)" }}>หมายเหตุ: {a.note}</span> : null}</td>
+                <td className="px-3 py-2 whitespace-nowrap" style={{ color: col }}>{st}</td>
+                <td className="px-3 py-2 whitespace-nowrap tabular-nums">{fmt(a.t)}</td>
+                <td className="px-3 py-2"><span className="flex flex-wrap gap-1.5 justify-end">
+                  {a.status === "pending" && btn("อนุมัติ", () => act(a.u, "approve"), "var(--green)", "acct-approve-" + a.u)}
+                  {a.status === "active" && btn("ปิดใช้งาน", () => act(a.u, "disable"))}
+                  {a.status === "disabled" && btn("เปิดใช้งาน", () => act(a.u, "enable"), "var(--green)")}
+                  {a.status !== "pending" && btn("รีเซ็ตรหัสผ่าน", () => act(a.u, "reset"), "var(--amber)", "acct-reset-" + a.u)}
+                  {confirmDel === a.u ? btn(a.status === "pending" ? "ยืนยันปฏิเสธ" : "ยืนยันลบ", () => act(a.u, "delete"), "var(--red)") : btn(a.status === "pending" ? "ปฏิเสธ" : "ลบ", () => setConfirmDel(a.u))}
+                </span></td>
+              </tr>); })}</tbody>
+          </table>
+        </div>
+      )}
+      {env.length > 0 && <p className="text-xs" style={{ color: "var(--dim)" }}>บัญชีอาจารย์ที่ตั้งใน Cloudflare (TEACHER_ACCOUNTS): {env.join(", ")} · จัดการได้เฉพาะใน Cloudflare</p>}
+    </div>
+  );
+}
 function LoginScreen({ onBack }) {
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [mode, setMode] = useState("login");   // login | register | sent
+  if (mode !== "login") return <RegisterScreen onBack={() => setMode("login")} />;
   const submit = async (e) => {
     if (e) e.preventDefault();
     if (!user.trim() || !pass) { setErr("กรอกชื่อผู้ใช้และรหัสผ่านให้ครบ"); return; }
@@ -4773,6 +4918,7 @@ function LoginScreen({ onBack }) {
           <button id="login-submit" type="submit" disabled={busy} className="cut f-display font-semibold inline-flex items-center justify-center gap-2 px-6 py-3"
             style={{ background: busy ? "var(--panel-2)" : "var(--amber)", color: busy ? "var(--dim)" : "#111311" }}><Icon name="log-in" size={18} />{busy ? "กำลังตรวจสอบ…" : "เข้าสู่ระบบ"}</button>
           <p className="text-xs" style={{ color: "var(--dim)" }}>อยู่ในระบบได้ 7 วันบนเบราว์เซอร์นี้ · ใช้เครื่องคนอื่นอย่าลืมกดออกจากระบบ</p>
+          <button id="open-register" type="button" onClick={() => setMode("register")} className="text-sm underline self-start" style={{ color: "var(--green)", textUnderlineOffset: 3 }}>อาจารย์ยังไม่มีบัญชี? ขอสมัครใช้งาน</button>
         </form>
       </div>
     </div>
@@ -5199,6 +5345,11 @@ function TeacherScreen({ onBack, onSample, onData, onPlay, onOpenStudent }) {
               <TacButton id="teacher-play" icon="gamepad-2" onClick={onPlay}>ลองเล่นเอง</TacButton>
             </div>
           </section>
+
+          {editorSession() && <section id="accounts" className="flex flex-col gap-3">
+            <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>7. {editorRole() === "admin" ? "บัญชีอาจารย์" : "บัญชีของฉัน"}</h2>
+            {editorRole() === "admin" ? <AccountAdmin /> : <MyAccount />}
+          </section>}
         </div>
       </div>
     </div>
