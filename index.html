@@ -4160,7 +4160,7 @@ const ROOM = (() => {
     code = roomNorm(q.get("room")) || roomNorm(sessionStorage.getItem("sv-room"));
     if (code) { sessionStorage.setItem("sv-room", code); state = "checking"; }
   } catch (e) {}
-  const clear = () => { code = null; name = null; state = "none"; try { sessionStorage.removeItem("sv-room"); } catch (e) {} emit(); };
+  const clear = () => { code = null; name = null; state = "none"; try { sessionStorage.removeItem("sv-room"); const u = new URL(window.location.href); if (u.searchParams.has("room")) { u.searchParams.delete("room"); window.history.replaceState(null, "", u.toString()); } } catch (e) {} emit(); };
   const check = async () => {
     if (!code) return;
     const r = await STORE.teacherCall({ mode: "room_info", code });
@@ -4170,8 +4170,54 @@ const ROOM = (() => {
     emit();
   };
   setTimeout(check, 0);
-  return { get code() { return code; }, get name() { return name; }, get state() { return state; }, missing: null, check, clear, sub(f) { subs.add(f); return () => subs.delete(f); } };
+  // เข้าห้องด้วยการพิมพ์รหัส (แบบ Kahoot) · ตรวจกับเซิร์ฟเวอร์ก่อน
+  const join = async (raw) => {
+    const c = roomNorm(raw);
+    if (!c) return { ok: false, error: "format" };
+    const r = await STORE.teacherCall({ mode: "room_info", code: c });
+    if (!r || !r.ok) return { ok: false, error: (r && r.error) || "offline" };
+    code = c; name = r.name; state = "ok"; ROOM.missing = null;
+    try { sessionStorage.setItem("sv-room", c); const u = new URL(window.location.href); u.searchParams.set("room", c); window.history.replaceState(null, "", u.toString()); } catch (e) {}
+    emit();
+    return { ok: true, name: r.name };
+  };
+  return { get code() { return code; }, get name() { return name; }, get state() { return state; }, missing: null, check, clear, join, sub(f) { subs.add(f); return () => subs.delete(f); } };
 })();
+function JoinRoom() {
+  const room = useRoom();
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState("");
+  const [st, setSt] = useState("");
+  const submit = async (e) => {
+    if (e) e.preventDefault();
+    setSt("busy");
+    const r = await ROOM.join(val);
+    if (r.ok) { AUDIO.play("select"); setSt(""); setOpen(false); setVal(""); }
+    else { AUDIO.play("alert"); setSt(r.error === "format" ? "รหัสห้องมี 6 ตัว (ตัวอักษรหรือตัวเลข)" : r.error === "room_not_found" ? "ไม่พบห้องนี้ ตรวจรหัสอีกครั้ง" : "เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง"); }
+  };
+  const box = { border: "1px solid var(--line)", padding: "6px 12px", background: "rgba(17,19,17,.6)", color: "var(--bone)" };
+  if (room.code) return (
+    <span id="room-joined" className="sv-hint" style={{ ...box, borderColor: "var(--green)", color: "var(--green)" }}>
+      <Icon name="door-open" size={13} />ห้อง {room.name || room.code} <span className="f-mono">({room.code})</span>
+      <button type="button" onClick={() => room.clear()} style={{ marginLeft: 8, color: "var(--dim)", textDecoration: "underline", background: "transparent", cursor: "pointer" }}>ออกจากห้อง</button>
+    </span>
+  );
+  if (!open) return (
+    <button id="join-open" onClick={() => { AUDIO.play("click"); setOpen(true); }} className="sv-hint" style={{ ...box, borderColor: "var(--green)", cursor: "pointer" }}>
+      <Icon name="door-open" size={13} />มีรหัสห้องจากอาจารย์? ใส่รหัสที่นี่
+    </button>
+  );
+  return (
+    <form id="join-form" onSubmit={submit} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: 8 }}>
+      <input id="join-code" value={val} autoFocus maxLength={6} inputMode="text" autoCapitalize="characters" autoComplete="off" spellCheck={false} aria-label="รหัสห้อง 6 ตัว"
+        onChange={(e) => { setVal(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")); setSt(""); }} placeholder="รหัสห้อง"
+        className="f-mono" style={{ width: 190, padding: "10px 12px", fontSize: 24, letterSpacing: "0.3em", textAlign: "center", background: "rgba(17,19,17,.85)", color: "var(--amber)", border: "1px solid var(--amber)" }} />
+      <button id="join-submit" type="submit" disabled={st === "busy" || val.length !== 6} style={{ padding: "12px 18px", fontWeight: 700, background: val.length === 6 ? "var(--green)" : "var(--panel-2)", color: val.length === 6 ? "#111311" : "var(--dim)", cursor: val.length === 6 ? "pointer" : "not-allowed" }}>{st === "busy" ? "กำลังตรวจ…" : "เข้าห้อง"}</button>
+      <button type="button" onClick={() => { setOpen(false); setSt(""); }} style={{ padding: "12px 10px", color: "var(--dim)", background: "transparent" }}>ยกเลิก</button>
+      {st && st !== "busy" && <span id="join-err" style={{ flexBasis: "100%", textAlign: "center", color: "var(--red)", fontSize: 14 }}>{st}</span>}
+    </form>
+  );
+}
 function useRoom() { const [, set] = useState(0); useEffect(() => ROOM.sub(() => set((n) => n + 1)), []); return ROOM; }
 function RoomBadge() {
   const room = useRoom();
@@ -4625,6 +4671,7 @@ function SplashScreen({ onPlay, onData, onAbout, onTeacher, onLogin, instant = f
         <div className="sv-slot">
           {ready && (<>
             <span className="sv-playwrap"><button id="splash-play" className="sv-play" onClick={play} autoFocus><Icon name="arrow-right" size={20} />เริ่มเล่น</button></span>
+            <JoinRoom />
             <span className="sv-hint"><Icon name={device === "pc" ? "monitor" : "smartphone"} size={13} />{device === "pc" ? "เล่นบนคอมพิวเตอร์" : "เล่นบนมือถือ"} · <Icon name="headphones" size={13} />แนะนำให้ใส่หูฟัง เกมนี้มีเสียง</span>
             {onAbout && (
               <button id="open-about" onClick={() => { AUDIO.play("click"); onAbout(); }} className="sv-hint" style={{ border: "1px solid var(--line)", padding: "6px 12px", background: "rgba(17,19,17,.6)", cursor: "pointer", color: "var(--bone)" }}>
@@ -4779,6 +4826,7 @@ function RoomManager({ rooms, setRooms, room, setRoom }) {
   const [copied, setCopied] = useState("");
   const [qr, setQr] = useState("");
   const [del, setDel] = useState("");
+  const [present, setPresent] = useState(null);
   const call = async (body) => {
     const a = teacherAuth();
     if (!a) { setErr("เข้าสู่ระบบ หรือใส่รหัสอาจารย์ในข้อ 3 ก่อน"); return null; }
@@ -4804,7 +4852,7 @@ function RoomManager({ rooms, setRooms, room, setRoom }) {
   return (
     <section id="rooms" className="flex flex-col gap-3">
       <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>2. ห้องเรียน</h2>
-      <p className="text-sm leading-relaxed max-w-3xl" style={{ color: "var(--dim)" }}>สร้างห้องให้แต่ละกลุ่มหรือแต่ละ Section แล้วส่งลิงก์หรือ QR ของห้องให้นักศึกษา ผลของนักศึกษาจากลิงก์นั้นจะแยกเป็นของห้องนั้น ไม่ปนกับผู้เล่นทั่วไปจากเว็บกลาง</p>
+      <p className="text-sm leading-relaxed max-w-3xl" style={{ color: "var(--dim)" }}>สร้างห้องให้แต่ละกลุ่มหรือแต่ละ Section แล้วให้นักศึกษาใส่รหัสห้องที่หน้าแรก (กด "ฉายขึ้นจอ" แบบ Kahoot) หรือส่งลิงก์/QR ของห้อง ผลของนักศึกษาจากลิงก์นั้นจะแยกเป็นของห้องนั้น ไม่ปนกับผู้เล่นทั่วไปจากเว็บกลาง</p>
       <div className="flex flex-wrap items-center gap-2">
         <input id="room-name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") create(); }} maxLength={60} placeholder="ชื่อห้อง เช่น Sec 01 จิตวิทยาเบื้องต้น"
           className="px-3 py-2 text-base border min-w-0 flex-1" style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--bone)", maxWidth: 360 }} />
@@ -4813,6 +4861,7 @@ function RoomManager({ rooms, setRooms, room, setRoom }) {
       </div>
       {err && <p className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
       {rooms && rooms.length === 0 && <p className="text-sm" style={{ color: "var(--dim)" }}>ยังไม่มีห้อง ตั้งชื่อแล้วกด "สร้างห้อง"</p>}
+      {present && <RoomPresent r={present} onClose={() => setPresent(null)} />}
       {rooms && rooms.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2">
           {rooms.map((r) => (
@@ -4828,6 +4877,7 @@ function RoomManager({ rooms, setRooms, room, setRoom }) {
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => { setRoom(r.code); setTimeout(() => { const el = document.getElementById("results"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm" style={{ background: "var(--amber)", color: "#111311" }}><Icon name="bar-chart-3" size={14} />ดูผลห้องนี้</button>
                 <button onClick={() => copy(r.code)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border" style={{ borderColor: "var(--line)", color: "var(--bone)" }}><Icon name={copied === r.code ? "check" : "copy"} size={14} />{copied === r.code ? "คัดลอกแล้ว" : "คัดลอกลิงก์"}</button>
+                <button onClick={() => { AUDIO.play("click"); setPresent(r); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border" style={{ borderColor: "var(--green)", color: "var(--green)" }}><Icon name="presentation" size={14} />ฉายขึ้นจอ</button>
                 <button onClick={() => setQr(qr === r.code ? "" : r.code)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border" style={{ borderColor: "var(--line)", color: "var(--bone)" }}><Icon name="qr-code" size={14} />{qr === r.code ? "ซ่อน QR" : "QR"}</button>
                 {del === r.code
                   ? <button onClick={() => remove(r.code)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border" style={{ borderColor: "var(--red)", color: "var(--red)" }}>ยืนยันลบห้อง</button>
@@ -4840,6 +4890,38 @@ function RoomManager({ rooms, setRooms, room, setRoom }) {
         </div>
       )}
     </section>
+  );
+}
+// ฉายขึ้นจอ (แบบ Kahoot): รหัสห้องตัวใหญ่ + QR + จำนวนคนที่เข้าห้องแล้ว (อัปเดตทุก 15 วิ)
+function RoomPresent({ r, onClose }) {
+  const [src, setSrc] = useState(null);
+  const [cnt, setCnt] = useState(null);
+  useEffect(() => { loadQr().then((qr) => { const q = qr(0, "M"); q.addData(roomLink(r.code)); q.make(); setSrc(q.createDataURL(12, 8)); }).catch(() => {}); }, [r.code]);
+  useEffect(() => {
+    let live = true;
+    const tick = async () => {
+      const a = teacherAuth(); if (!a) return;
+      const res = await STORE.teacherCall({ mode: "list", ...a });
+      if (live && res && res.ok) { const rows = (res.sessions || []).filter((x) => x.rm === r.code); setCnt({ all: rows.length, done: rows.filter((x) => x.done).length }); }
+    };
+    tick(); const t = setInterval(tick, 15000);
+    const esc = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", esc);
+    return () => { live = false; clearInterval(t); window.removeEventListener("keydown", esc); };
+  }, [r.code]);
+  return (
+    <div id="room-present" role="dialog" aria-label={"ฉายรหัสห้อง " + r.name} className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 p-6 overflow-y-auto" style={{ background: "#0b0c0b" }}>
+      <button onClick={onClose} className="absolute top-4 right-4 inline-flex items-center gap-1.5 px-3 py-2 text-sm border" style={{ borderColor: "var(--line)", color: "var(--bone)" }}><Icon name="x" size={16} />ปิด</button>
+      <p className="f-display font-bold text-2xl sm:text-4xl text-center" style={{ color: "var(--bone)" }}>{r.name}</p>
+      <div className="flex flex-wrap items-center justify-center gap-10">
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-lg sm:text-2xl text-center" style={{ color: "var(--dim)" }}>เข้า <b style={{ color: "var(--bone)" }}>survimind.github.io/survimind</b><br />แล้วใส่รหัสห้อง</p>
+          <p className="f-mono font-bold" style={{ fontSize: "clamp(56px, 11vw, 140px)", letterSpacing: "0.12em", color: "var(--amber)", lineHeight: 1 }}>{r.code}</p>
+        </div>
+        {src && <div className="flex flex-col items-center gap-2"><img src={src} alt="QR เข้าห้อง" style={{ width: "min(340px, 70vw)", background: "#fff", imageRendering: "pixelated" }} /><span className="text-lg" style={{ color: "var(--dim)" }}>หรือสแกน QR</span></div>}
+      </div>
+      <p className="f-display text-xl sm:text-3xl" style={{ color: "var(--green)" }}>{cnt ? "เข้าห้องแล้ว " + cnt.all + " คน · เล่นจบ " + cnt.done + " คน" : "กำลังนับผู้เล่น…"}</p>
+    </div>
   );
 }
 function RoomFilter({ rooms, room, setRoom }) {
