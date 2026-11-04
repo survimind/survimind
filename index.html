@@ -3319,6 +3319,28 @@ const QTE_TIMEOUT_FX = { health: -10, infection: 8, panic: 10 };
 const QTE_LATE_S = 12;
 // ช่วงอ่านก่อนเริ่มนับเวลา (ผู้เล่นจริง: อ่านสถานการณ์ไม่ทัน) · กดตอบระหว่างอ่านได้ เวลาตอบนับจากตอนเริ่มนับ (ไม่ติดลบ)
 const READ_MS = 3000;
+// ป๊อปอัพเตือนก่อนเหตุการณ์เร่งด่วน (ผู้เล่นจริงขอให้รู้ตัวก่อน) · เสียงเตือน 3 ครั้งแล้วค่อยเปิดด่าน
+const ALERT_MS = 2300;
+function UrgentAlert({ u }) {
+  const [n, setN] = useState(1);
+  useEffect(() => { const a = setTimeout(() => setN(2), 750), b = setTimeout(() => setN(3), 1500); return () => { clearTimeout(a); clearTimeout(b); }; }, []);
+  const haz = u.kind === "haz";
+  const col = haz ? "var(--amber)" : "var(--red)";
+  return (
+    <div id="urgent-alert" role="alertdialog" aria-live="assertive" aria-label="เหตุการณ์เร่งด่วน" className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(12,4,3,.74)" }}>
+      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 320, damping: 18 }}
+        className="w-full max-w-md flex flex-col items-center gap-3 p-6 text-center border-2" style={{ borderColor: col, background: "rgba(24,10,8,.96)", boxShadow: "0 0 60px -10px " + (haz ? "rgba(242,163,58,.9)" : "rgba(229,55,44,.9)") }}>
+        <motion.span animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 0.75, repeat: Infinity }} style={{ color: col }}><Icon name={haz ? "backpack" : "siren"} size={52} /></motion.span>
+        <span className="lbl" style={{ color: col }}>{haz ? "Item crisis" : "Urgent"}</span>
+        <h2 className="f-display font-bold text-3xl sm:text-4xl" style={{ color: col }}>เหตุการณ์เร่งด่วน!</h2>
+        <p className="f-display text-lg sm:text-xl leading-snug" style={{ color: "var(--bone)" }}>{u.title}</p>
+        <p className="text-base"><span style={{ color: "var(--dim)" }}>{haz ? "เลือกของในเป้" : "เลือกวิธีรับมือ"} · มีเวลา </span><b className="text-xl" style={{ color: "var(--amber)" }}>{u.secs} วินาที</b></p>
+        <span className="flex gap-3 mt-1" aria-hidden="true">{[1, 2, 3].map((k) => <span key={k} className="w-4 h-4 rounded-full" style={{ background: k <= n ? col : "transparent", border: "2px solid " + col, boxShadow: k <= n ? "0 0 12px " + col : "none", transition: "all .15s" }} />)}</span>
+        <span className="text-xs" style={{ color: "var(--dim)" }}>เตรียมตัว… อ่านตัวเลือกได้อีก {READ_MS / 1000} วินาทีก่อนเริ่มนับ</span>
+      </motion.div>
+    </div>
+  );
+}
 function qteScore(e) {
   if (e.choice === "timeout") return 0;
   const speed = Math.max(40, Math.min(100, 100 - ((e.rt - 1) / (QTE_MS / 1000 - 1)) * 60));
@@ -10526,6 +10548,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const [itemFocus, setItemFocus] = useState(null);  // ไอเทมที่กำลังดูรายละเอียดบนเข็มขัด
   const [armed, setArmed] = useState(null);          // { id, mode: "use" | "gift" } ใช้ร่วมกับคำตอบข้อนี้
   const [qte, setQte] = useState(null);              // { title, start, result }
+  const [urgent, setUrgent] = useState(null);        // ป๊อปอัพเตือนก่อน QTE / ด่านเลือกของ
   const [qteLeft, setQteLeft] = useState(QTE_MS);
   const [hazard, setHazard] = useState(null);        // { ...HAZARDS[n], start, result }
   const [hazLeft, setHazLeft] = useState(HAZ_MS);
@@ -10548,7 +10571,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
 
   const timers = useRef([]), typer = useRef(null), skipTyping = useRef(null), voice = useRef({}), token = useRef(0), handled = useRef(new Set());
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); };
-  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; if (typer.current) clearInterval(typer.current); stopVoice(voice.current); AUDIO.duck(false); };
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; if (typer.current) clearInterval(typer.current); stopVoice(voice.current); AUDIO.duck(false); setUrgent(null); };
   useEffect(() => { Object.entries(window.__QV || {}).forEach(([k, src]) => AUDIO.loadClip(k, src)); return () => clearAll(); }, []);
 
   const q = questions[qi];
@@ -10577,8 +10600,12 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     if (tourRef.current !== null) return; // รอให้ดูวิธีเล่นจบก่อน ค่อยเริ่มอ่านคำถาม
     if (handled.current.has(qi)) return;
     handled.current.add(qi);
-    if (ACTIVE_SCENARIO === "zombie" && QTE_AT[q.n] && !tele.current.qte.some((e) => e.qi === qi)) { startQte(); return; }
-    if (hazardFor(q.n) && !tele.current.hazards.some((e) => e.qi === qi)) { startHazard(); return; }
+    const alertThen = (info, fn) => {
+      setUrgent(info); AUDIO.play("alert"); later(() => AUDIO.play("alert"), 750); later(() => AUDIO.play("alert"), 1500);
+      later(() => { setUrgent(null); fn(); }, ALERT_MS);
+    };
+    if (ACTIVE_SCENARIO === "zombie" && QTE_AT[q.n] && !tele.current.qte.some((e) => e.qi === qi)) { alertThen({ kind: "qte", title: QTE_AT[q.n](charId), secs: QTE_MS / 1000 }, startQte); return; }
+    if (hazardFor(q.n) && !tele.current.hazards.some((e) => e.qi === qi)) { alertThen({ kind: "haz", title: hazardFor(q.n).title, secs: HAZ_MS / 1000 }, startHazard); return; }
     startNarrate();
   };
   // ---- Item Crisis ----
@@ -11335,6 +11362,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   return (
     <div className="h-full flex flex-col gap-3 py-3 max-w-7xl mx-auto w-full">
       {tourEl && (window.ReactDOM && ReactDOM.createPortal ? ReactDOM.createPortal(tourEl, document.body) : tourEl)}
+      {urgent && <UrgentAlert key={urgent.title} u={urgent} />}
       {/* Header HUD */}
       <header className="flex items-center gap-3 flex-wrap border px-3 py-2" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
         <button id="game-back" onClick={() => { AUDIO.play("click"); goBack(); }} className="tac cut px-2.5 py-1 text-xs inline-flex items-center gap-1" title={qi === 0 ? "กลับไปเลือกตัวละคร" : "ย้อนกลับไปตอบข้อก่อนหน้าใหม่"}>
