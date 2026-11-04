@@ -160,3 +160,5 @@ API key ไม่หาย เพราะเก็บเป็น Secret ใน
 1. Discord: ที่ห้องแชต (เช่น #ทั่วไป) กดรูปเฟือง → การเชื่อมต่อ (Integrations) → เว็บฮุก (Webhooks) → สร้างเว็บฮุกใหม่ → คัดลอก URL เว็บฮุก
 2. Cloudflare → survimind-ai → Settings → Variables and Secrets → Add → Type = Secret · Name = `DISCORD_WEBHOOK` · Value = URL ที่คัดลอก → Deploy
 3. URL นี้เป็นความลับ (ใครได้ไปก็โพสต์เข้าห้องได้) อย่าส่งในแชตหรือใส่ในไฟล์
+
+<!-- deploy check -->
