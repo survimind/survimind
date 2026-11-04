@@ -4743,7 +4743,7 @@ function LoginScreen({ onBack }) {
     const r = await STORE.teacherCall({ mode: "login", user: user.trim(), pass });
     setBusy(false);
     if (!r || !r.ok || !r.token) { setErr(LOGIN_ERR[r && r.error] || "เข้าสู่ระบบไม่สำเร็จ"); return; }
-    try { localStorage.setItem(EDITOR_SESSION_KEY, JSON.stringify({ token: r.token, user: r.user, exp: r.exp })); } catch (er) { setErr("เบราว์เซอร์นี้บันทึกการเข้าสู่ระบบไม่ได้ (ปิดโหมดไม่ระบุตัวตนแล้วลองใหม่)"); return; }
+    try { localStorage.setItem(EDITOR_SESSION_KEY, JSON.stringify({ token: r.token, user: r.user, exp: r.exp, role: r.role || "admin" })); } catch (er) { setErr("เบราว์เซอร์นี้บันทึกการเข้าสู่ระบบไม่ได้ (ปิดโหมดไม่ระบุตัวตนแล้วลองใหม่)"); return; }
     AUDIO.play("select");
     try { sessionStorage.setItem("sv-open-teacher", "1"); } catch (er) {}   // โหลดใหม่ให้โหมดทีมทำงานทั้งเว็บ แล้วเปิดห้องอาจารย์
     window.location.replace(window.location.pathname);
@@ -4925,7 +4925,8 @@ function RoomPresent({ r, onClose }) {
   );
 }
 function RoomFilter({ rooms, room, setRoom }) {
-  const opts = [["all", "ทั้งหมด"], ["none", "เว็บกลาง (ไม่มีห้อง)"], ...((rooms || []).map((r) => [r.code, r.name]))];
+  const teacher = editorRole() === "teacher";
+  const opts = [["all", teacher ? "ทุกห้องของฉัน" : "ทั้งหมด"], ...(teacher ? [] : [["none", "เว็บกลาง (ไม่มีห้อง)"]]), ...((rooms || []).map((r) => [r.code, r.name]))];
   return (
     <div id="room-filter" className="flex flex-wrap items-center gap-2 text-sm">
       <span style={{ color: "var(--dim)" }}>ดูผลของ:</span>
@@ -5149,6 +5150,7 @@ function TeacherScreen({ onBack, onSample, onData, onPlay, onOpenStudent }) {
             <span className="flex flex-wrap items-center justify-between gap-2">
               <span className="lbl inline-flex items-center gap-2" style={{ color: "var(--amber)" }}><Icon name="graduation-cap" size={14} />Teacher Console · ห้องอาจารย์</span>
               {editorSession() && <span className="inline-flex items-center gap-2 text-sm" style={{ color: "var(--dim)" }}><Icon name="user-round" size={14} />{editorSession().user}
+                <span className="text-xs px-2 py-0.5 border" style={{ borderColor: editorRole() === "teacher" ? "var(--green)" : "var(--amber)", color: editorRole() === "teacher" ? "var(--green)" : "var(--amber)" }}>{editorRole() === "teacher" ? "อาจารย์ · เห็นเฉพาะห้องของตัวเอง" : "ทีมผู้ดูแล · เห็นทั้งหมด"}</span>
                 <button id="logout" onClick={() => { editorLogout(); window.location.href = window.location.pathname; }} className="px-2 py-1 text-xs border" style={{ borderColor: "var(--line)", color: "var(--bone)" }}>ออกจากระบบ</button></span>}
             </span>
             <h1 className="f-display font-bold text-3xl sm:text-5xl leading-tight">ดูผลลัพธ์ได้ทันที <span style={{ color: "var(--amber)" }}>ไม่ต้องเล่นเกม</span></h1>
@@ -5180,7 +5182,7 @@ function TeacherScreen({ onBack, onSample, onData, onPlay, onOpenStudent }) {
           <StudentResults onOpen={onOpenStudent} room={room} rooms={rooms} setRoom={setRoom} />
           <FeedbackList room={room} />
 
-          <section className="flex flex-col gap-3">
+          {editorRole() !== "teacher" && <section className="flex flex-col gap-3">
             <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>5. ลิงก์เว็บกลาง (ไม่ผูกกับห้อง)</h2>
             <div className="flex flex-wrap items-center gap-3 p-4 border" style={{ borderColor: "var(--line)", background: "var(--panel)" }}>
               <code className="f-mono text-sm sm:text-base break-all" style={{ color: "var(--bone)" }}>{STUDENT_LINK}</code>
@@ -5189,7 +5191,7 @@ function TeacherScreen({ onBack, onSample, onData, onPlay, onOpenStudent }) {
               </button>
             </div>
             <p className="text-sm" style={{ color: "var(--dim)" }}>ผลจากลิงก์นี้จะอยู่ในกลุ่ม "เว็บกลาง" ถ้าต้องการแยกผลตามห้อง ให้ใช้ลิงก์ของห้องในข้อ 2 · นักศึกษาเห็นเฉพาะผลของตัวเองเสมอ</p>
-          </section>
+          </section>}
 
           <section className="flex flex-col gap-3">
             <h2 className="f-display font-bold text-xl" style={{ color: "var(--green)" }}>6. เครื่องมืออื่น</h2>
@@ -5782,8 +5784,10 @@ const SHOW_EDITOR = false;   // ปิดสำหรับผู้เล่น
 // เข้าสู่ระบบทีม (Editor): ชื่อผู้ใช้ + รหัสผ่าน ตรวจที่ Worker (EDITOR_ACCOUNTS) · ได้ token อายุ 7 วัน เก็บในเบราว์เซอร์นี้
 const EDITOR_SESSION_KEY = "sv-editor-session";
 function editorSession() { try { const v = JSON.parse(localStorage.getItem(EDITOR_SESSION_KEY) || "null"); return v && v.token && v.exp > Date.now() ? v : null; } catch (e) { return null; } }
+// บทบาท: "admin" = ทีมผู้ดูแล (เครื่องมือ Editor + เห็นข้อมูลทั้งหมด) · "teacher" = อาจารย์ (เห็นเฉพาะห้องของตัวเอง ไม่มีเครื่องมือ Editor)
+const editorRole = () => { const s = editorSession(); return s ? s.role || "admin" : null; };
 function editorLogout() { try { localStorage.removeItem(EDITOR_SESSION_KEY); } catch (e) {} }
-const EDITOR_BY_URL = (() => { try { const q = new URLSearchParams(window.location.search); if (q.has("player")) return false; return SHOW_EDITOR || !!editorSession(); } catch (e) { return SHOW_EDITOR; } })();
+const EDITOR_BY_URL = (() => { try { const q = new URLSearchParams(window.location.search); if (q.has("player")) return false; return SHOW_EDITOR || editorRole() === "admin"; } catch (e) { return SHOW_EDITOR; } })();
 function useIsEditor() {
   const [ed, setEd] = useState(false);
   useEffect(() => {
@@ -12765,7 +12769,10 @@ function App() {
   const [profile, setProfile] = useState(null);   // { sid, gender, age }
   useEffect(() => {   // ตรวจว่าการเข้าสู่ระบบทีมยังใช้ได้ (หมดอายุ/บัญชีถูกเปลี่ยน → ออกจากระบบ)
     const ses = editorSession(); if (!ses) return;
-    STORE.teacherCall({ mode: "verify", token: ses.token }).then((r) => { if (r && !r.ok && (r.error === "session_expired" || r.error === "accounts_missing")) { editorLogout(); window.location.reload(); } });
+    STORE.teacherCall({ mode: "verify", token: ses.token }).then((r) => {
+      if (r && !r.ok && (r.error === "session_expired" || r.error === "accounts_missing")) { editorLogout(); window.location.reload(); return; }
+      if (r && r.ok && r.role && r.role !== (ses.role || "admin")) { try { localStorage.setItem(EDITOR_SESSION_KEY, JSON.stringify({ ...ses, role: r.role })); } catch (e) {} window.location.reload(); }   // บทบาทเปลี่ยน (เช่น ย้ายจากทีมเป็นอาจารย์)
+    });
   }, []);
   const [device, setDevice] = useState("pc");
   const [charId, setCharId] = useState(null);

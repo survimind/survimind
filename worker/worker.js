@@ -15,6 +15,7 @@
  *   TEACHER_KEY      (Secret, สำหรับห้องอาจารย์) รหัสที่อาจารย์ใช้ดูผลของนักศึกษา
  *   SESSIONS         (KV namespace binding, สำหรับห้องอาจารย์) ที่เก็บผลการเล่นของนักศึกษา
  *   EDITOR_ACCOUNTS  (Secret, สำหรับเข้าสู่ระบบทีม) บัญชี ชื่อผู้ใช้:รหัสผ่าน คั่นหลายบัญชีด้วยจุลภาค
+ *   TEACHER_ACCOUNTS (Secret, ไม่บังคับ) บัญชีอาจารย์รายคน รูปแบบเดียวกัน · เห็นเฉพาะห้องเรียนที่ตัวเองสร้าง
  *                    เช่น  admin:รหัสยาวๆ,teacher:อีกรหัส  (เปลี่ยนค่านี้ = ทุกคนต้องเข้าสู่ระบบใหม่)
  *
  * ห้องอาจารย์ (mode):
@@ -322,6 +323,18 @@ async function teacherApi(body, env, cors) {
     if (!env.TEACHER_KEY) return json({ ok: false, error: body.token ? "session_expired" : "teacher_key_missing" }, body.token ? 401 : 503, cors);
     if (!sameKey(String(body.key || ""), env.TEACHER_KEY)) { await sleep(500); return json({ ok: false, error: body.token && !body.key ? "session_expired" : "wrong_key" }, 401, cors); }
   }
+  // บทบาท: อาจารย์เห็นเฉพาะห้องของตัวเอง · ทีม/รหัสอาจารย์ (TEACHER_KEY) เห็นทุกอย่าง
+  const isAdmin = !byToken || byToken.r === "admin";
+  const me = byToken ? byToken.u : "teacher";
+  const myRooms = async () => {
+    const set = new Set(); let c;
+    do {
+      const page = await env.SESSIONS.list({ prefix: "r:", cursor: c, limit: 1000 });
+      page.keys.forEach((k) => { if (k.metadata && k.metadata.owner === me) set.add(k.metadata.code); });
+      c = page.list_complete ? undefined : page.cursor;
+    } while (c);
+    return set;
+  };
   if (body.mode === "room_create") {
     const name = (tStr(body.name, 60) || "").trim();
     if (!name) return json({ ok: false, error: "room_name" }, 400, cors);
@@ -341,12 +354,13 @@ async function teacherApi(body, env, cors) {
       c = page.list_complete ? undefined : page.cursor;
     } while (c && rooms.length < 2000);
     rooms.sort((a, b) => (b.t || 0) - (a.t || 0));
-    return json({ ok: true, rooms }, 200, cors);
+    return json({ ok: true, role: isAdmin ? "admin" : "teacher", rooms: isAdmin ? rooms : rooms.filter((r) => r.owner === me) }, 200, cors);
   }
   if (body.mode === "room_delete") {
     // ลบเฉพาะห้อง (ลิงก์ใช้ไม่ได้อีก) · ผลที่เล่นไปแล้วยังอยู่และยังกรองดูด้วยรหัสห้องได้
     const code = roomCode(body.code);
     if (!code) return json({ ok: false, error: "room_not_found" }, 404, cors);
+    if (!isAdmin) { const r = await env.SESSIONS.get("r:" + code, "json"); if (!r || r.owner !== me) return json({ ok: false, error: "not_your_room" }, 403, cors); }
     await env.SESSIONS.delete("r:" + code);
     return json({ ok: true }, 200, cors);
   }
@@ -354,6 +368,7 @@ async function teacherApi(body, env, cors) {
     const sid = tStr(body.sid, 40);
     if (!sid) return json({ ok: false, error: "bad_sid" }, 400, cors);
     const rec = await env.SESSIONS.get("s:" + sid, "json");
+    if (rec && !isAdmin && !(rec.room && (await myRooms()).has(rec.room))) return json({ ok: false, error: "not_found" }, 404, cors);
     return rec ? json({ ok: true, session: rec }, 200, cors) : json({ ok: false, error: "not_found" }, 404, cors);
   }
   if (body.mode === "feedback_list") {
@@ -365,8 +380,9 @@ async function teacherApi(body, env, cors) {
       c = page.list_complete ? undefined : page.cursor;
     } while (c && keys.length < 3000);
     keys.sort().reverse();
-    const vals = await Promise.all(keys.slice(0, 300).map((k) => env.SESSIONS.get(k, "json").catch(() => null)));
-    return json({ ok: true, total: keys.length, feedback: vals.filter(Boolean) }, 200, cors);
+    const vals = (await Promise.all(keys.slice(0, 300).map((k) => env.SESSIONS.get(k, "json").catch(() => null)))).filter(Boolean);
+    if (!isAdmin) { const mine = await myRooms(); const fb = vals.filter((f) => f.room && mine.has(f.room)); return json({ ok: true, role: "teacher", total: fb.length, feedback: fb }, 200, cors); }
+    return json({ ok: true, role: "admin", total: keys.length, feedback: vals }, 200, cors);
   }
   const rows = [];
   let cursor;
@@ -376,7 +392,8 @@ async function teacherApi(body, env, cors) {
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor && rows.length < 5000);
   rows.sort((a, b) => (b.t || 0) - (a.t || 0));
-  return json({ ok: true, sessions: rows }, 200, cors);
+  if (!isAdmin) { const mine = await myRooms(); return json({ ok: true, role: "teacher", sessions: rows.filter((x) => x.rm && mine.has(x.rm)) }, 200, cors); }
+  return json({ ok: true, role: "admin", sessions: rows }, 200, cors);
 }
 
 
@@ -386,35 +403,42 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const b64uText = (t) => b64u(new TextEncoder().encode(t));
 const unb64uText = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)));
+// บัญชี 2 บทบาท: EDITOR_ACCOUNTS = ทีมผู้ดูแล (เห็นทุกอย่าง) · TEACHER_ACCOUNTS = อาจารย์ (เห็นเฉพาะห้องที่ตัวเองสร้าง)
+// รูปแบบเดียวกัน "ชื่อ:รหัส,ชื่อ2:รหัส2" · ชื่อซ้ำกันสองรายการ ให้ถือเป็นทีม
+function parseAccounts(v, role) {
+  return String(v || "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean)
+    .map((x) => { const i = x.indexOf(":"); return i > 0 ? { u: x.slice(0, i).trim(), p: x.slice(i + 1).trim(), r: role } : null; }).filter((a) => a && a.u && a.p);
+}
 function accountsOf(env) {
-  return String(env.EDITOR_ACCOUNTS || "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean)
-    .map((x) => { const i = x.indexOf(":"); return i > 0 ? { u: x.slice(0, i).trim(), p: x.slice(i + 1).trim() } : null; }).filter((a) => a && a.u && a.p);
+  const admins = parseAccounts(env.EDITOR_ACCOUNTS, "admin");
+  return [...admins, ...parseAccounts(env.TEACHER_ACCOUNTS, "teacher").filter((t) => !admins.some((a) => a.u === t.u))];
 }
 async function sign(text, env) {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("survimind-editor|" + env.EDITOR_ACCOUNTS), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("survimind-editor|" + (env.EDITOR_ACCOUNTS || "") + (env.TEACHER_ACCOUNTS ? "|" + env.TEACHER_ACCOUNTS : "")), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return b64u(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text)));
 }
 async function verifyToken(token, env) {
   try {
-    if (!env.EDITOR_ACCOUNTS) return null;
+    if (!env.EDITOR_ACCOUNTS && !env.TEACHER_ACCOUNTS) return null;
     const [body, sig] = token.split(".");
     if (!body || !sig || !sameKey(sig, await sign(body, env))) return null;
     const data = JSON.parse(unb64uText(body));
     if (!data || !data.u || !(data.exp > Date.now())) return null;
-    if (!accountsOf(env).some((a) => a.u === data.u)) return null;
-    return data;
+    const acc = accountsOf(env).find((a) => a.u === data.u);
+    if (!acc) return null;
+    return { ...data, r: acc.r };   // บทบาทอ่านจากบัญชีปัจจุบันเสมอ (ย้ายจากทีมเป็นอาจารย์แล้วมีผลทันที)
   } catch { return null; }
 }
 async function editorAuth(body, env, cors) {
-  if (!env.EDITOR_ACCOUNTS) return json({ ok: false, error: "accounts_missing" }, 503, cors);
+  if (!env.EDITOR_ACCOUNTS && !env.TEACHER_ACCOUNTS) return json({ ok: false, error: "accounts_missing" }, 503, cors);
   if (body.mode === "verify") {
     const d = await verifyToken(String(body.token || ""), env);
-    return d ? json({ ok: true, user: d.u, exp: d.exp }, 200, cors) : json({ ok: false, error: "session_expired" }, 401, cors);
+    return d ? json({ ok: true, user: d.u, exp: d.exp, role: d.r }, 200, cors) : json({ ok: false, error: "session_expired" }, 401, cors);
   }
   const u = tStr(body.user, 40) || "", p = tStr(body.pass, 200) || "";
   const acc = accountsOf(env).find((a) => sameKey(u.trim(), a.u));
   if (!acc || !sameKey(p, acc.p)) { await sleep(700); return json({ ok: false, error: "wrong_login" }, 401, cors); }
   const exp = Date.now() + TOKEN_DAYS * 864e5;
   const payload = b64uText(JSON.stringify({ u: acc.u, exp }));
-  return json({ ok: true, user: acc.u, exp, token: payload + "." + (await sign(payload, env)) }, 200, cors);
+  return json({ ok: true, user: acc.u, exp, role: acc.r, token: payload + "." + (await sign(payload, env)) }, 200, cors);
 }
