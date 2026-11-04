@@ -3317,6 +3317,8 @@ const QTE_ACTIONS = {
 const QTE_RETREAT = { id: "retreat", label: "ถอยหลบตั้งหลัก", icon: "undo-2", fx: { panic: 4, infection: 2 } };
 const QTE_TIMEOUT_FX = { health: -10, infection: 8, panic: 10 };
 const QTE_LATE_S = 12;
+// ช่วงอ่านก่อนเริ่มนับเวลา (ผู้เล่นจริง: อ่านสถานการณ์ไม่ทัน) · กดตอบระหว่างอ่านได้ เวลาตอบนับจากตอนเริ่มนับ (ไม่ติดลบ)
+const READ_MS = 3000;
 function qteScore(e) {
   if (e.choice === "timeout") return 0;
   const speed = Math.max(40, Math.min(100, 100 - ((e.rt - 1) / (QTE_MS / 1000 - 1)) * 60));
@@ -3401,11 +3403,11 @@ function HazardPanel({ hz, left, inventory, allyReady, wide, onPick }) {
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="relative border p-3 sm:p-4 flex flex-col gap-3 overflow-hidden shrink-0"
       style={{ borderColor: "var(--amber)", background: "rgba(36,24,8,.92)", boxShadow: "0 0 32px -8px rgba(242,163,58,.75)" }}>
       <div className="flex items-center gap-3">
-        <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--amber)" }}><Icon name="backpack" size={13} />Item crisis · เลือกของในเป้ภายใน {HAZ_MS / 1000} วินาที</span>
-        <span className="ml-auto f-mono text-sm tabular-nums" style={{ color: r ? "var(--dim)" : left < 3000 ? "var(--red)" : "var(--amber)" }}>{r ? (r.rt != null ? r.rt.toFixed(1) + "s" : "หมดเวลา") : (left / 1000).toFixed(1) + "s"}</span>
+        <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--amber)" }}><Icon name="backpack" size={13} />Item crisis · เลือกของภายใน {HAZ_MS / 1000} วิ</span>
+        <span className="ml-auto f-mono text-sm tabular-nums" style={{ color: r ? "var(--dim)" : left < 3000 ? "var(--red)" : "var(--amber)" }}>{r ? (r.rt != null ? r.rt.toFixed(1) + "s" : "หมดเวลา") : left > HAZ_MS ? "อ่าน… " + Math.ceil((left - HAZ_MS) / 1000) : (left / 1000).toFixed(1) + "s"}</span>
       </div>
       <div className="h-2" style={{ background: "#2a1d08" }}>
-        <div className="h-full" style={{ width: (r ? 0 : (left / HAZ_MS) * 100) + "%", background: left < 3000 ? "var(--red)" : "var(--amber)", transition: "width 50ms linear" }} />
+        <div className="h-full" style={{ width: (r ? 0 : Math.min(1, left / HAZ_MS) * 100) + "%", background: left < 3000 ? "var(--red)" : "var(--amber)", opacity: left > HAZ_MS ? 0.45 : 1, transition: "width 50ms linear" }} />
       </div>
       <div className="flex items-start gap-3">
         <motion.span className="shrink-0 w-11 h-11 flex items-center justify-center border" style={{ borderColor: "var(--red)", color: "var(--red)", background: "rgba(229,55,44,.12)" }}
@@ -3471,7 +3473,7 @@ function HazardPanel({ hz, left, inventory, allyReady, wide, onPick }) {
           </div>
         </div>
       )}
-      <p className="text-[11px]" style={{ color: "var(--dim)" }}>ดูป้ายความสามารถของไอเทมให้ตรงกับสิ่งที่ต้องการ · ไม่ตอบภายใน {HAZ_MS / 1000} วินาที = ไม่ทันตั้งตัว · ส่วนนี้ไม่มีผลกับคะแนน MBTI</p>
+      <p className="text-xs" style={{ color: "var(--dim)" }}>เลือกของที่มีป้ายตรงกับ “สิ่งที่ต้องมี” · หมดเวลา = ไม่ทันตั้งตัว · ไม่มีผลกับคะแนน MBTI</p>
     </motion.section>
   );
 }
@@ -10583,17 +10585,17 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   const allyReady = tele.current.items.some((e) => e.type === "gift") && !tele.current.hazards.some((e) => e.outcome === "ally");
   const startHazard = () => {
     token.current++;
-    const start = performance.now();
+    const start = performance.now() + READ_MS;   // เริ่มนับหลังช่วงอ่าน
     setHazard({ ...hazardFor(q.n), start, result: null });
-    setHazLeft(HAZ_MS);
+    setHazLeft(HAZ_MS + READ_MS);
     setPhase("hazard");
     AUDIO.play("alert"); AUDIO.play("glitch");
-    for (let t = 1000; t < HAZ_MS; t += 1000) later(() => AUDIO.play(t >= HAZ_MS - 3000 ? "heartbeat" : "type"), t);
-    later(() => resolveHazard(null, start), HAZ_MS);
+    for (let t = 1000; t < HAZ_MS; t += 1000) later(() => AUDIO.play(t >= HAZ_MS - 3000 ? "heartbeat" : "type"), READ_MS + t);
+    later(() => resolveHazard(null, start), READ_MS + HAZ_MS);
   };
   useEffect(() => {
     if (phase !== "hazard" || !hazard || hazard.result) return;
-    const id = setInterval(() => setHazLeft(Math.max(0, HAZ_MS - (performance.now() - hazard.start))), 50);
+    const id = setInterval(() => setHazLeft(Math.max(0, HAZ_MS - (performance.now() - hazard.start))), 50);   // > HAZ_MS = ยังอยู่ช่วงอ่าน
     return () => clearInterval(id);
   }, [phase, hazard]);
   const hazDone = useRef(-1);
@@ -10602,7 +10604,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     const hz = hazardFor(q.n); if (!hz) return;
     hazDone.current = qi;
     clearAll();
-    const rt = pick ? Math.round(((performance.now() - start) / 1000) * 10) / 10 : null;
+    const rt = pick ? Math.max(0, Math.round(((performance.now() - start) / 1000) * 10) / 10) : null;
     let outcome, fx, story, itemId = null;
     let inv = inventory.map((x) => ({ ...x }));
     if (!pick) { outcome = "timeout"; fx = hz.fail; story = hz.failText; }
@@ -10640,13 +10642,13 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
   })();
   const startQte = () => {
     token.current++;
-    const start = performance.now();
+    const start = performance.now() + READ_MS;   // เริ่มนับหลังช่วงอ่าน
     setQte({ title: QTE_AT[q.n](charId), start, result: null });
-    setQteLeft(QTE_MS);
+    setQteLeft(QTE_MS + READ_MS);
     setPhase("qte");
     AUDIO.play("growl"); AUDIO.play("alert");
-    for (let t = 0; t < QTE_MS; t += 500) later(() => AUDIO.play("heartbeat"), t);
-    later(() => resolveQte(null, start), QTE_MS);
+    for (let t = 0; t < QTE_MS; t += 500) later(() => AUDIO.play("heartbeat"), READ_MS + t);
+    later(() => resolveQte(null, start), READ_MS + QTE_MS);
   };
   useEffect(() => {
     if (phase !== "qte" || !qte || qte.result) return;
@@ -10658,7 +10660,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
     if (qteDone.current === qi) return;
     qteDone.current = qi;
     clearAll();
-    const rt = Math.round(((performance.now() - start) / 1000) * 100) / 100;
+    const rt = Math.max(0, Math.round(((performance.now() - start) / 1000) * 100) / 100);
     const choice = action ? action.id : "timeout";
     let fx = action ? { ...action.fx } : { ...QTE_TIMEOUT_FX };
     if (action && rt > QTE_LATE_S) fx = fxAdd(fx, { health: -3 });
@@ -11182,11 +11184,11 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-3 sm:p-4 flex flex-col gap-3 shrink-0"
               style={{ borderColor: "var(--red)", background: "rgba(40,10,8,.9)", boxShadow: "0 0 30px -8px rgba(229,55,44,.8)" }}>
               <div className="flex items-center gap-3">
-                <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--red)" }}><Icon name="siren" size={13} />Quick-time event · ตอบสนองภายใน {QTE_MS / 1000} วินาที</span>
-                <span className="ml-auto f-mono text-sm tabular-nums" style={{ color: qte.result ? "var(--dim)" : "var(--red)" }}>{qte.result ? (qte.result.rt != null ? qte.result.rt.toFixed(2) + "s" : "หมดเวลา") : (qteLeft / 1000).toFixed(1) + "s"}</span>
+                <span className="lbl inline-flex items-center gap-1.5" style={{ color: "var(--red)" }}><Icon name="siren" size={13} />เหตุกะทันหัน · ตอบภายใน {QTE_MS / 1000} วิ</span>
+                <span className="ml-auto f-mono text-sm tabular-nums" style={{ color: qte.result ? "var(--dim)" : "var(--red)" }}>{qte.result ? (qte.result.rt != null ? qte.result.rt.toFixed(2) + "s" : "หมดเวลา") : qteLeft > QTE_MS ? "อ่าน… " + Math.ceil((qteLeft - QTE_MS) / 1000) : (qteLeft / 1000).toFixed(1) + "s"}</span>
               </div>
               <div className="h-2.5" style={{ background: "#2a0d0b" }}>
-                <div className="h-full" style={{ width: (qte.result ? 0 : (qteLeft / QTE_MS) * 100) + "%", background: qteLeft < 1000 ? "#ff5a4a" : "var(--red)", transition: "width 50ms linear" }} />
+                <div className="h-full" style={{ width: (qte.result ? 0 : Math.min(1, qteLeft / QTE_MS) * 100) + "%", background: qteLeft < 1000 ? "#ff5a4a" : "var(--red)", opacity: qteLeft > QTE_MS ? 0.45 : 1, transition: "width 50ms linear" }} />
               </div>
               <div className="grid gap-2 grid-cols-1">
                 {qteActions.map((a, i) => {
@@ -11209,7 +11211,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
                   );
                 })}
               </div>
-              <p className="text-[11px]" style={{ color: "var(--dim)" }}>ไม่ตอบภายใน {QTE_MS / 1000} วินาที = ทีมโดนจู่โจม ({fxText(QTE_TIMEOUT_FX)}) · ตอบช้ากว่า {QTE_LATE_S} วินาที = ทันแบบเฉียดฉิว (Health −3) · ส่วนนี้ไม่มีผลกับคะแนน MBTI</p>
+              <p className="text-xs" style={{ color: "var(--dim)" }}>หมดเวลา = ทีมโดนจู่โจม · ช้ากว่า {QTE_LATE_S} วิ = รอดแบบเฉียดฉิว · ไม่มีผลกับคะแนน MBTI</p>
             </motion.section>
           ) : phase === "probe" && probe ? (
             <motion.section id="probe-panel" key={"probe" + qi} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="border p-4 flex flex-col gap-3" style={{ borderColor: "var(--green)", background: "rgba(16,24,16,.92)", boxShadow: "0 0 26px -10px rgba(132,166,90,.7)" }}>
@@ -11395,7 +11397,7 @@ function GameScreen({ device, charId, muted, onToggleMute, crt, onToggleCrt, onC
                 <motion.div className="absolute inset-0" style={{ transformOrigin: "50% 100%" }}
                   initial={{ scale: 0.5, opacity: 0, y: 40 }}
                   animate={qte.result ? (qte.result.hit ? { scale: 1.7, opacity: 1, y: 60 } : { scale: 0.45, opacity: 0, y: 30 }) : { scale: 1.15, opacity: 1, y: 0 }}
-                  transition={qte.result ? { duration: 0.35, ease: "easeOut" } : { duration: QTE_MS / 1000, ease: "easeIn" }}>
+                  transition={qte.result ? { duration: 0.35, ease: "easeOut" } : { duration: QTE_MS / 1000, delay: READ_MS / 1000, ease: "easeIn" }}>
                   <svg viewBox="0 0 1600 900" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMax meet"><Zombie x={800} y={1000} s={1.9} lunge /></svg>
                 </motion.div>
                 <div className="absolute inset-x-0 top-[12%] flex flex-col items-center gap-1 text-center px-4">
