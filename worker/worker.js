@@ -56,8 +56,7 @@ const SCHEMA_HINT = `ตอบเป็น JSON รูปแบบนี้เ�
 จำนวน: key_moments 3 ข้อ, strengths 2-3 ข้อ, growth_areas 2-3 ข้อ, study_strategies 3 ข้อ, stress_tips 2-3 ข้อ, seven_day_plan 7 วัน`;
 
 export default {
-  async fetch(request, env, ctx) {
-    env.__ctx = ctx;   // ใช้ส่งแจ้งเตือนเบื้องหลัง (ไม่ทำให้ผู้ใช้รอ)
+  async fetch(request, env) {
     const allowed = (env.ALLOWED_ORIGINS || DEFAULT_ORIGINS).split(",").map((s) => s.trim()).filter(Boolean);
     const origin = request.headers.get("Origin") || "";
     const okOrigin = allowed.includes(origin);
@@ -81,7 +80,7 @@ export default {
 
     // ---- ห้องอาจารย์: เก็บและดูผลของนักศึกษา ----
     if (body && (body.mode === "login" || body.mode === "verify")) return editorAuth(body, env, cors);
-    if (body && ["register", "change_password", "accept_terms", "acct_list", "acct_create", "acct_set"].includes(body.mode)) return accountApi(body, env, cors);
+    if (body && ["register", "change_password", "accept_terms", "acct_list", "acct_create", "acct_set", "notify_test"].includes(body.mode)) return accountApi(body, env, cors);
     if (body && ["save", "list", "get", "feedback", "feedback_list", "room_info", "room_create", "room_list", "room_delete"].includes(body.mode)) return teacherApi(body, env, cors);
 
     if (!env.GEMINI_API_KEY) return json({ ok: false, error: "missing_key" }, 500, cors);
@@ -476,11 +475,18 @@ async function editorAuth(body, env, cors) {
   return issue({ ...k, r: "teacher" }, env, cors);
 }
 // แจ้งเตือนทีมผ่าน Discord Webhook (Secret: DISCORD_WEBHOOK) · ไม่ได้ตั้งค่า = ไม่ส่ง · ล้มเหลวเงียบ ๆ
-function notify(env, text) {
-  const url = env.DISCORD_WEBHOOK;
-  if (!url || !/^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\//.test(url)) return;
-  const p = fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "SURVIMIND", content: text.slice(0, 1900), allowed_mentions: { parse: [] } }) }).catch(() => {});
-  if (env.__ctx && env.__ctx.waitUntil) env.__ctx.waitUntil(p);
+// รอผลการส่งจริง (สูงสุด 4 วิ) แทนการส่งเบื้องหลัง เพราะ Worker อาจตัดคำขอที่ค้างหลังตอบผู้ใช้แล้ว
+async function notify(env, text) {
+  const url = String(env.DISCORD_WEBHOOK || "").trim();
+  if (!url) return { sent: false, why: "not_configured" };
+  if (!/^https:\/\/([a-z]+\.)?discord(app)?\.com\/api\/webhooks\/\d+\/[\w-]+/.test(url)) return { sent: false, why: "bad_url" };
+  try {
+    const r = await Promise.race([
+      fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "SURVIMIND", content: text.slice(0, 1900), allowed_mentions: { parse: [] } }) }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000)),
+    ]);
+    return r.ok ? { sent: true, status: r.status } : { sent: false, why: "discord_" + r.status };
+  } catch (e) { return { sent: false, why: String((e && e.message) || "error").slice(0, 40) }; }
 }
 // สมัคร · เปลี่ยนรหัส · ทีมจัดการบัญชี
 async function accountApi(body, env, cors) {
@@ -499,7 +505,7 @@ async function accountApi(body, env, cors) {
     if (pending >= 50) return json({ ok: false, error: "too_many_pending" }, 429, cors);
     const h = await hashPass(p);
     await putAcct(env, { u, name, org, note, status: "pending", t: Date.now(), consentAt: Date.now(), ...h, pv: 0 });
-    notify(env, "🔔 **มีอาจารย์ขอสมัครบัญชี SURVIMIND**\nชื่อ: " + name + (org ? "\nคณะ/หน่วยงาน: " + org : "") + "\nชื่อผู้ใช้: `" + u + "`" + (note ? "\nหมายเหตุ: " + note : "") + "\nอนุมัติได้ที่ ห้องอาจารย์ → ข้อ 7 บัญชีอาจารย์ (หน้าเดโม: https://survimind.github.io/survimind/demo/)");
+    await notify(env, "🔔 **มีอาจารย์ขอสมัครบัญชี SURVIMIND**\nชื่อ: " + name + (org ? "\nคณะ/หน่วยงาน: " + org : "") + "\nชื่อผู้ใช้: `" + u + "`" + (note ? "\nหมายเหตุ: " + note : "") + "\nอนุมัติได้ที่ ห้องอาจารย์ → ข้อ 7 บัญชีอาจารย์ (หน้าเดโม: https://survimind.github.io/survimind/demo/)");
     return json({ ok: true, status: "pending" }, 200, cors);
   }
   const me = body.token ? await verifyToken(String(body.token), env) : null;
@@ -518,6 +524,10 @@ async function accountApi(body, env, cors) {
     return json({ ok: true }, 200, cors);
   }
   if (me.r !== "admin") return json({ ok: false, error: "admin_only" }, 403, cors);
+  if (body.mode === "notify_test") {
+    const r = await notify(env, "✅ ทดสอบแจ้งเตือนจาก SURVIMIND (กดโดย " + me.u + ") · ถ้าเห็นข้อความนี้ การแจ้งเตือนเมื่อมีอาจารย์สมัครทำงานแล้ว");
+    return json({ ok: true, ...r }, 200, cors);
+  }
   if (body.mode === "acct_list") {
     const out = []; let c;
     do { const page = await env.SESSIONS.list({ prefix: "a:", cursor: c, limit: 1000 }); page.keys.forEach((k) => out.push(k.metadata || { u: k.name.slice(2) })); c = page.list_complete ? undefined : page.cursor; } while (c);

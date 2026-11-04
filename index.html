@@ -4905,6 +4905,8 @@ function AccountAdmin() {
       <div className="flex items-center gap-3 text-sm">
         <span style={{ color: "var(--dim)" }}>{list ? "บัญชีอาจารย์ " + list.length + " บัญชี" + (pend ? " · รออนุมัติ " + pend : "") : "กำลังโหลด…"}</span>
         <button onClick={load} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border" style={{ borderColor: "var(--line)" }}><Icon name="refresh-cw" size={12} />โหลดใหม่</button>
+        <button id="notify-test" onClick={async () => { const r = await call({ mode: "notify_test" }, "notify"); if (r) (r.sent ? setDone : setErr)(r.sent ? "ส่งข้อความทดสอบเข้า Discord แล้ว ลองดูในห้องแชต" : ({ not_configured: "ยังไม่ได้ตั้ง DISCORD_WEBHOOK ใน Cloudflare (หรือยังไม่ได้กด Deploy)", bad_url: "DISCORD_WEBHOOK ไม่ใช่ URL เว็บฮุกของ Discord ตรวจว่าคัดลอกมาครบ" }[r.why] || "Discord ตอบกลับผิดพลาด (" + r.why + ") ลองสร้างเว็บฮุกใหม่")); }}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border" style={{ borderColor: "var(--line)" }}><Icon name="bell-ring" size={12} />ทดสอบแจ้งเตือน Discord</button>
       </div>
       {err && <p id="acct-err" className="text-sm" style={{ color: "var(--red)" }}>{err}</p>}
       {done && !err && <p id="acct-done" className="text-sm" style={{ color: "var(--green)" }}>{done}</p>}
