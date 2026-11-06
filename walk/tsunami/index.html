@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SURVIMIND · วันที่ทะเลกลืนกินเมือง (โหมดเดินสำรวจ)</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #0f1416; --panel: #172024; --panel2: #1f2b30; --line: #2e3d43;
+  --bone: #eaf0ee; --dim: #9fb0b2; --amber: #f0a43a; --red: #e2483a; --green: #8fbf6a; --sea: #4fa3c7; --violet: #b98bd9;
+  --f-display: "Chakra Petch", "IBM Plex Sans Thai", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans Thai", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--bone); font-family: var(--f-body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 1060px; margin: 0 auto; padding-block: 20px 60px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 16px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; line-height: 1.2; text-wrap: balance; }
+p { margin: 0; }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.brand { font-family: var(--f-display); font-size: 22px; letter-spacing: .04em; } .brand b { color: var(--red); }
+.beta { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; color: var(--amber); border: 1px solid var(--amber); padding: 2px 8px; }
+a { color: var(--amber); font-size: 14px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--sea); }
+.dim { color: var(--dim); }
+.game { position: relative; border: 1px solid var(--line); background: #071014; }
+.game canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.hud { position: absolute; left: 8px; top: 8px; display: flex; gap: 8px; flex-wrap: wrap; pointer-events: none; }
+.meter { background: rgba(7,12,14,.84); border: 1px solid var(--line); padding: 4px 8px; min-width: 112px; font-size: 12px; line-height: 1.3; }
+.meter .bar { height: 5px; background: #24302f; margin-top: 3px; } .meter .bar i { display: block; height: 100%; transition: width .2s; }
+.chip { position: absolute; right: 8px; top: 8px; background: rgba(7,12,14,.84); border: 1px solid var(--sea); color: var(--sea); font-family: var(--f-mono); font-size: 12px; padding: 4px 8px; pointer-events: none; }
+.toast { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(7,12,14,.92); border: 1px solid var(--green); color: var(--green); font-size: 13px; padding: 4px 12px; pointer-events: none; white-space: nowrap; max-width: 94%; overflow: hidden; text-overflow: ellipsis; }
+.modal { position: absolute; inset: 0; background: rgba(3,7,9,.74); display: grid; place-items: center; padding: 12px; z-index: 20; }
+.card { width: min(600px, 100%); background: var(--panel); border: 1px solid var(--sea); padding: 18px; display: flex; flex-direction: column; gap: 10px; max-height: 100%; overflow: auto; }
+.card.warn { border-color: var(--red); }
+.card .opts { display: flex; flex-direction: column; gap: 8px; }
+.say { display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
+.say b { font-family: var(--f-display); }
+button { font: inherit; font-size: 15px; color: var(--bone); background: var(--panel2); border: 1px solid var(--line); padding: 9px 12px; cursor: pointer; text-align: left; }
+button:hover { border-color: var(--sea); }
+button.primary { background: var(--sea); color: #071014; border-color: var(--sea); font-weight: 600; text-align: center; }
+button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.pick { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; text-align: center; }
+.pick canvas { width: 48px; height: 72px; image-rendering: pixelated; }
+.pick.on { border-color: var(--amber); background: #2a2a1e; }
+.pick small { font-size: 11px; color: var(--dim); line-height: 1.2; }
+.controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; }
+.pad { display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(2, 48px); gap: 4px; }
+.pad button { padding: 0; font-size: 20px; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; text-align: center; }
+.pad .u { grid-column: 2; grid-row: 1; } .pad .l { grid-column: 1; grid-row: 2; } .pad .d { grid-column: 2; grid-row: 2; } .pad .r { grid-column: 3; grid-row: 2; }
+.help { font-size: 14px; color: var(--dim); max-width: 60ch; }
+.bars { display: grid; gap: 6px; }
+.pair { display: grid; grid-template-columns: 22px 1fr 22px; gap: 8px; align-items: center; font-family: var(--f-mono); font-size: 13px; }
+.pair .track { height: 10px; background: #24302f; position: relative; }
+.pair .track i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--sea); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.stats div { background: var(--panel2); padding: 8px 10px; display: flex; flex-direction: column; }
+.stats b { font-family: var(--f-mono); font-size: 18px; color: var(--violet); font-variant-numeric: tabular-nums; }
+.stats span { font-size: 12px; color: var(--dim); }
+.big { font-family: var(--f-display); font-size: 54px; color: var(--amber); letter-spacing: .06em; line-height: 1; }
+@media (max-width: 640px) {
+  .hud { position: static; padding: 8px; gap: 6px; background: var(--panel); border-top: 1px solid var(--line); }
+  .meter { min-width: 0; flex: 1 1 0; font-size: 11.5px; }
+  .chip { position: static; display: block; border: 0; border-top: 1px solid var(--line); text-align: center; }
+  .controls { flex-direction: column-reverse; align-items: stretch; }
+  .pad { align-self: center; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 64px); gap: 6px; }
+  .pad button { font-size: 24px; }
+  .modal { position: fixed; padding: 16px; }
+  .picks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <span class="brand">SURVI<b>MIND</b></span>
+    <span class="beta">PROTOTYPE · ยังไม่เก็บข้อมูล</span>
+    <a href="../">← ชั้น 6 ตึกเรียน</a>
+  </div>
+  <div>
+    <span class="eyebrow">โหมดเดินสำรวจ · สถานการณ์สึนามิ</span>
+    <h1 style="font-size:clamp(26px,4.4vw,40px)">วันที่ทะเลกลืนกินเมือง</h1>
+  </div>
+  <div class="game" id="game">
+    <canvas id="cv" width="768" height="448" aria-label="แผนที่เกม มองจากด้านบน"></canvas>
+    <div class="hud" id="hud"></div>
+    <div class="chip" id="chip"></div>
+    <div class="toast" id="toast" hidden></div>
+    <div class="modal" id="modal" hidden><div class="card" id="card" role="dialog" aria-modal="true"></div></div>
+  </div>
+  <div class="controls">
+    <p class="help">คอมใช้ปุ่มลูกศรหรือ WASD · มือถือใช้ปุ่มทิศทาง · เดินไปที่ <b style="color:var(--amber)">!</b> เพื่อเจอเหตุการณ์ · น้ำจะไล่ตามมาเรื่อย ๆ อย่ายืนในน้ำนาน · เพื่อนจะเดินตามคุณ · เจอเหตุการณ์ครบแล้วไปที่ลูกศรสีเขียวเพื่อไปฉากต่อไป</p>
+    <div class="pad" aria-label="ปุ่มทิศทาง">
+      <button class="u" data-d="0,-1" aria-label="ขึ้น">▲</button>
+      <button class="l" data-d="-1,0" aria-label="ซ้าย">◀</button>
+      <button class="d" data-d="0,1" aria-label="ลง">▼</button>
+      <button class="r" data-d="1,0" aria-label="ขวา">▶</button>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+const QS = [{"n": 1, "title": "นาทีแห่งการตัดสินใจ", "text": ["คลื่นกำลังเข้ามาใกล้ ถนนสายหลักเริ่มติดขัด เพื่อนทั้งสี่คนหันมารอฟังความคิดเห็นจากคุณ"], "lines": [], "opts": [{"k": "A", "t": "ตะโกนเรียกทุกคนมารวมกัน แล้วสั่งทันทีว่าใครเดินนำ ใครดูแลคนข้างหลัง", "tags": ["E", "J"], "out": "ทุกคนรวมกลุ่มได้เร็ว เอกเดินนำ บอมคอยดูแลท้ายแถว"}, {"k": "B", "t": "เงียบไปครู่หนึ่ง กวาดตามองรอบตัว แล้วเลือกทางที่คนน้อยที่สุดตอนนั้น", "tags": ["I", "P"], "out": "คุณเห็นซอยข้างร้านค้าที่คนน้อยที่สุด ทุกคนตามคุณไปได้คล่อง"}, {"k": "C", "t": "มองหาป้ายเส้นทางอพยพสึนามิริมถนน แล้วเดินตามลูกศรทันที", "tags": ["S", "T"], "out": "ป้ายสีฟ้ารูปคลื่นชี้ขึ้นไปทางถนนใหญ่ ทุกคนเดินตามลูกศร"}, {"k": "D", "t": "จับมือเพื่อนทุกคนไว้ แล้วนึกถึงเนินสูงที่เคยเห็นตอนเดินเล่นเมื่อเช้า", "tags": ["N", "F"], "out": "ทุกคนจับมือกันแน่น คุณนึกออกว่าเนินเขาอยู่หลังตัวเมือง"}]}, {"n": 2, "title": "เส้นทางอพยพ", "text": ["ระหว่างทาง แว่นพบแผนที่อพยพที่ระบุเส้นทางขึ้นเนินเขา แต่บอมกลับเห็นทางลัดผ่านอาคารใกล้เคียง"], "lines": [["แว่น", "ทางเนินเขามีเส้นทางอพยพที่ระบุไว้ชัดเจน"], ["บอม", "แต่ทางนี้ใกล้กว่าตั้งเยอะ!"]], "opts": [{"k": "A", "t": "แย้งบอมตรง ๆ ว่าทางลัดผ่านตึก ถ้าน้ำมาถึงก่อนเราจะติดอยู่ข้างใน", "tags": ["E", "T"], "out": "บอมหน้าเสียแต่ก็ยอมฟัง ทั้งกลุ่มไปตามทางขึ้นเนิน"}, {"k": "B", "t": "ไม่พูดอะไร แต่เดินไปทางที่เพื่อนส่วนใหญ่ดูสบายใจที่สุด", "tags": ["I", "F"], "out": "เพื่อนส่วนใหญ่เลือกทางเนิน บอมบ่นนิดหน่อยแต่ก็เดินตามมา"}, {"k": "C", "t": "เดินตามเส้นทางในแผนที่อพยพทีละจุดอย่างเคร่งครัด", "tags": ["S", "J"], "out": "แผนที่บอกจุดเลี้ยวชัดเจน ทุกคนรู้ว่าต้องไปทางไหน"}, {"k": "D", "t": "ลองทางลัดของบอมก่อน ถ้าไปไม่ได้ค่อยวกกลับมาทางเนิน", "tags": ["N", "P"], "out": "ทางลัดมีรถจอดขวาง ทุกคนวกกลับมาทางเนินได้ทัน"}]}, {"n": 3, "title": "ผู้ประสบภัย", "text": ["ฟ้าพบเด็กคนหนึ่งพลัดหลงจากครอบครัวและกำลังร้องไห้"], "lines": [["ฟ้า", "เราต้องช่วยเด็กคนนี้นะ!"], ["เอก", "แต่เราต้องระวังเวลาและความปลอดภัยด้วย"]], "opts": [{"k": "A", "t": "อุ้มเด็กขึ้นหลังทันที แล้วตะโกนถามหาพ่อแม่ของเด็กไปตลอดทาง", "tags": ["E", "P"], "out": "เสียงตะโกนของคุณทำให้คนรอบข้างช่วยกันมองหาพ่อแม่ของเด็ก"}, {"k": "B", "t": "จูงมือเด็กไว้เงียบ ๆ แล้วเดินตามแผนเดิมต่อโดยไม่แวะที่ไหน", "tags": ["I", "J"], "out": "เด็กกุมมือคุณแน่น ทั้งกลุ่มเดินต่อตามแผนโดยไม่เสียจังหวะ"}, {"k": "C", "t": "ปลอบเด็กให้หยุดร้อง ถามชื่อ และดูว่าบาดเจ็บตรงไหนหรือเปล่า", "tags": ["S", "F"], "out": "เด็กชื่อน้ำใส มีแผลถลอกที่เข่าเล็กน้อย เธอค่อย ๆ หยุดร้อง"}, {"k": "D", "t": "คิดว่าทางที่ดีที่สุดคือพาเด็กขึ้นที่สูงไปด้วยก่อน แล้วค่อยตามหาครอบครัวที่ศูนย์อพยพ", "tags": ["N", "T"], "out": "ฟ้าเห็นด้วย ที่ศูนย์อพยพมีเจ้าหน้าที่ช่วยตามหาครอบครัวได้"}]}, {"n": 4, "title": "อาคารที่เสียหาย", "text": ["ทั้งกลุ่มพบอาคารสูงที่อาจใช้เป็นที่หลบภัย แต่ตัวอาคารมีรอยแตกร้าวจากแรงสั่นสะเทือน"], "lines": [["อ้วน", "ตรงนั้น! อาคารสูง น่าจะขึ้นไปหลบได้!"], ["แว่น", "อย่าเพิ่งเข้าไป โครงสร้างอาจเสียหาย!"]], "opts": [{"k": "A", "t": "ตะโกนถามคนที่ยืนอยู่หน้าตึกว่าข้างในเป็นอย่างไร มีใครขึ้นไปแล้วบ้าง", "tags": ["E", "S"], "out": "คนหน้าตึกบอกว่าบันไดชั้นสองพังไปแล้ว ยังไม่มีใครขึ้นไปได้"}, {"k": "B", "t": "มองไปรอบ ๆ เงียบ ๆ แล้วนึกถึงตึกอีกหลังที่ดูแข็งแรงกว่าซึ่งอยู่ไม่ไกล", "tags": ["I", "N"], "out": "คุณจำตำแหน่งตึกจอดรถคอนกรีตอีกหลังไว้เป็นทางสำรอง"}, {"k": "C", "t": "ตัดสินตามหลัก: ตึกร้าวเสี่ยงถล่ม ไปต่อตามเส้นทางขึ้นเนินทันที", "tags": ["T", "J"], "out": "ทั้งกลุ่มเดินผ่านตึกร้าวไปตามเส้นทางขึ้นเนิน"}, {"k": "D", "t": "เห็นอ้วนเหนื่อยมากแล้ว จึงยอมเข้าไปพักชั้นล่างก่อน ค่อยดูอีกทีว่าจะไปต่อไหม", "tags": ["F", "P"], "out": "อ้วนได้พักหายใจครู่หนึ่ง แล้วทุกคนก็รีบออกมาเดินต่อ"}]}, {"n": 5, "title": "ความขัดแย้ง", "text": ["เอกและบอมเริ่มโต้เถียงกันเรื่องเส้นทางอพยพ"], "lines": [["บอม", "เลิกยึดติดกับแผนเดิมได้แล้ว!"], ["เอก", "ถ้าไม่มีแผน เราจะเอาตัวรอดยังไง!"], ["ฟ้า", "หยุดก่อน! เราต้องฟังกันทุกคน"]], "opts": [{"k": "A", "t": "เข้าไปยืนกลางวง ให้ทั้งคู่พูดความรู้สึกออกมาทีละคน", "tags": ["E", "F"], "out": "ทั้งคู่ได้พูดสิ่งที่กังวล บรรยากาศเย็นลง แล้วทุกคนไปต่อด้วยกัน"}, {"k": "B", "t": "ไม่เข้าไปเถียงด้วย แต่ชี้ให้ทุกคนดูว่าน้ำกำลังมาจากทางไหน แล้วให้ข้อเท็จจริงตัดสิน", "tags": ["I", "T"], "out": "พอเห็นน้ำไหลมาจากฝั่งซ้าย ทั้งคู่ก็เลิกเถียงแล้วเดินไปทางขวา"}, {"k": "C", "t": "ไม่สนว่าใครถูก ดูว่าตอนนี้ทางไหนโล่งที่สุดแล้วพาทุกคนไปทางนั้นเลย", "tags": ["S", "P"], "out": "คุณพาทุกคนเลี้ยวเข้าถนนที่โล่งที่สุด ไม่มีใครเถียงต่อ"}, {"k": "D", "t": "เสนอแผนใหม่ที่รวมข้อดีของทั้งสองฝ่าย แล้วให้ทุกคนตกลงก่อนออกเดิน", "tags": ["N", "J"], "out": "แผนใหม่ใช้ถนนใหญ่ของเอกและทางลัดสั้น ๆ ของบอม ทุกคนพยักหน้า"}]}, {"n": 6, "title": "สัญญาณขอความช่วยเหลือ", "text": ["แว่นสังเกตเห็นแสงไฟกะพริบจากอาคารใกล้เคียง คล้ายมีคนกำลังขอความช่วยเหลือ"], "lines": [["แว่น", "เห็นไหม! มีคนอยู่ข้างบน!"], ["ฟ้า", "เราต้องหาทางช่วยพวกเขา"], ["บอม", "แต่ทางเข้าอาคารดูไม่ค่อยปลอดภัยเลย"], ["อ้วน", "ลองหาทางเข้าจากอีกฝั่งไหม?"]], "opts": [{"k": "A", "t": "ตะโกนให้คนบนตึกได้ยิน แล้วคิดวิธีส่งสัญญาณบอกให้พวกเขารออยู่ข้างบนอย่าลงมา", "tags": ["E", "N"], "out": "คนบนตึกโบกไฟตอบกลับ พวกเขารู้แล้วว่าต้องรออยู่ข้างบน"}, {"k": "B", "t": "จดจำตำแหน่งตึก ชั้น และสีของไฟไว้ เพื่อแจ้งเจ้าหน้าที่เมื่อไปถึงศูนย์", "tags": ["I", "S"], "out": "ตึกสีครีม ชั้น 4 ไฟกะพริบสีขาว คุณท่องไว้ในใจ"}, {"k": "C", "t": "ประเมินว่าเข้าไปเองเสี่ยงเกินไป จึงมองหาเจ้าหน้าที่หรือเรือกู้ภัยที่อยู่ใกล้ที่สุดแทน", "tags": ["T", "P"], "out": "คุณเห็นเรือกู้ภัยที่ปลายถนน แล้วชี้ตำแหน่งตึกให้เจ้าหน้าที่"}, {"k": "D", "t": "แบ่งทีมทันที สองคนอ้อมไปดูทางเข้าอีกฝั่ง ที่เหลือรออยู่บนที่สูง", "tags": ["F", "J"], "out": "สองคนที่อ้อมไปกลับมาบอกว่าน้ำลึกเกินไป ทีมจึงแจ้งเจ้าหน้าที่แทน"}]}, {"n": 7, "title": "แผนที่ไร้สัญญาณ", "text": ["โทรศัพท์ทุกเครื่องไม่มีสัญญาณ แผนที่ใช้งานไม่ได้ และเส้นทางเดิมถูกน้ำท่วม"], "lines": [["บอม", "แล้วตอนนี้จะเอายังไงต่อ?"], ["แว่น", "เรายังประเมินเส้นทางจากสภาพแวดล้อมได้"], ["เอก", "งั้นเราต้องวางแผนใหม่!"], ["อ้วน", "ลองหาทางอื่นกันไหม?"]], "opts": [{"k": "A", "t": "เรียกทุกคนมาตั้งจุดนัดพบ ถ้าใครพลัดหลงให้ไปเจอกันที่นั่น", "tags": ["E", "J"], "out": "ทุกคนตกลงว่าถ้าพลัดหลง ให้ไปเจอกันที่ป้ายศูนย์อพยพบนเนิน"}, {"k": "B", "t": "เงียบฟังเสียงรอบตัว แล้วเดินตามกลุ่มคนในพื้นที่ที่ดูรู้ทาง", "tags": ["I", "P"], "out": "ชาวบ้านกลุ่มหนึ่งเดินไปทางขวา คุณพาเพื่อนตามไปเงียบ ๆ"}, {"k": "C", "t": "ดูจากสิ่งที่เห็น เนินไหนสูงสุด น้ำไหลมาทางไหน แล้วเลือกทางที่ห่างน้ำที่สุด", "tags": ["S", "T"], "out": "ถนนฝั่งขวาสูงกว่าและแห้งกว่า คุณพาทุกคนไปทางนั้น"}, {"k": "D", "t": "ปลอบอ้วนกับบอมที่เริ่มเครียด แล้วชวนทุกคนนึกว่าเมื่อเช้าเดินผ่านจุดสูงตรงไหนมาบ้าง", "tags": ["N", "F"], "out": "อ้วนนึกออกว่าเมื่อเช้าเห็นวัดบนเนินทางขวา ทุกคนยิ้มออก"}]}, {"n": 8, "title": "ทรัพยากรที่เหลืออยู่", "text": ["หลังเดินขึ้นเนินมาเกือบชั่วโมง น้ำดื่มและอาหารของกลุ่มเริ่มเหลือน้อย"], "lines": [["อ้วน", "ของเหลือแค่นี้เองเหรอ?"], ["แว่น", "เราต้องจัดสรรให้เพียงพอจนกว่าจะถึงศูนย์อพยพ"], ["ฟ้า", "ทุกคนแบ่งกันนะ อย่าให้ใครขาด"]], "opts": [{"k": "A", "t": "ชวนทุกคนเอาของออกมากองรวมกัน แล้วแบ่งตามที่แต่ละคนหิวตอนนั้น", "tags": ["E", "P"], "out": "ทุกคนได้กินคนละนิด อ้วนดีใจที่สุด"}, {"k": "B", "t": "นับของเงียบ ๆ แล้วคิดในใจว่าแต่ละคนได้เท่าไรต่อชั่วโมง", "tags": ["I", "J"], "out": "คุณคำนวณได้ว่าน้ำพอสำหรับอีกสองชั่วโมง ถ้าดื่มทีละอึก"}, {"k": "C", "t": "ให้น้ำกับคนที่บาดเจ็บหรือเหนื่อยที่สุดก่อน ตามสภาพที่เห็นตรงหน้า", "tags": ["S", "F"], "out": "เด็กกับอ้วนได้ดื่มน้ำก่อน ทั้งคู่มีแรงเดินต่อ"}, {"k": "D", "t": "เก็บน้ำไว้ส่วนหนึ่ง เผื่อที่ศูนย์อพยพก็ขาดแคลนเหมือนกัน", "tags": ["N", "T"], "out": "คุณเก็บน้ำขวดสุดท้ายไว้ก้นเป้"}]}, {"n": 9, "title": "ศูนย์อพยพ", "text": ["ในที่สุดทั้งกลุ่มเดินทางถึงพื้นที่สูง และพบศูนย์อพยพที่มีผู้ประสบภัยจำนวนมาก"], "lines": [["ฟ้า", "มีคนต้องการความช่วยเหลือเยอะมากเลย"], ["เอก", "เราต้องจัดระบบก่อน ทุกคนจะได้ช่วยกัน"], ["แว่น", "ควรตรวจสอบจำนวนผู้ประสบภัยและทรัพยากรที่เหลือ"], ["บอม", "งั้นแบ่งหน้าที่กันเลยไหม?"]], "opts": [{"k": "A", "t": "อาสาไปช่วยเจ้าหน้าที่ลงทะเบียนผู้ประสบภัยทีละคน", "tags": ["E", "S"], "out": "คุณช่วยลงชื่อผู้ประสบภัยได้หลายสิบคน เจ้าหน้าที่ขอบคุณ"}, {"k": "B", "t": "สังเกตอยู่ห่าง ๆ ว่าศูนย์ยังขาดอะไร แล้วคิดวิธีแก้ที่คนอื่นอาจมองข้าม", "tags": ["I", "N"], "out": "คุณสังเกตว่าเด็กหลายคนยังไม่มีป้ายชื่อ จึงเสนอให้ทำป้ายติดเสื้อ"}, {"k": "C", "t": "แบ่งหน้าที่ในทีม คนแจกน้ำ คนดูแลเด็ก คนตามหาครอบครัวของเด็กที่พามา", "tags": ["T", "J"], "out": "ทุกคนมีหน้าที่ชัดเจน ไม่นานก็เจอแม่ของเด็กที่พามา"}, {"k": "D", "t": "เดินไปนั่งข้างคนที่ร้องไห้อยู่คนเดียว แล้วช่วยตามที่เขาต้องการ", "tags": ["F", "P"], "out": "หญิงคนนั้นเล่าว่าพลัดกับครอบครัวที่ตลาด คุณพาไปที่โต๊ะตามหาญาติ"}]}, {"n": 10, "title": "การตัดสินใจครั้งสุดท้าย", "text": ["เสียงประกาศแจ้งเตือนคลื่นระลอกใหม่ดังขึ้น เจ้าหน้าที่กำลังเตรียมเคลื่อนย้ายผู้ประสบภัยไปยังพื้นที่ปลอดภัยแห่งใหม่"], "lines": [["เอก", "ทุกคนเตรียมตัว เราต้องไปต่อ!"], ["แว่น", "รอฟังข้อมูลจากเจ้าหน้าที่ก่อน"], ["บอม", "รออะไรอีก ไปเลยดิ!"], ["ฟ้า", "เราต้องผ่านเรื่องนี้ไปด้วยกันนะ"], ["อ้วน", "เอาล่ะ ไปกันต่อ!"]], "opts": [{"k": "A", "t": "รวมเพื่อนกับเด็กที่ช่วยมาให้อยู่ด้วยกัน แล้วให้กำลังใจทุกคนระหว่างรอ", "tags": ["E", "F"], "out": "ทุกคนนั่งรวมกันจนรถมารับ ไม่มีใครหลงจากกลุ่ม"}, {"k": "B", "t": "ทบทวนในใจ คลื่นลูกหลังอาจใหญ่กว่าลูกแรก ไม่มีเหตุผลที่จะลงไปที่ต่ำตอนนี้", "tags": ["I", "T"], "out": "คุณบอกเพื่อนว่าอยู่บนที่สูงไว้ก่อน ไม่ลงไปเก็บของที่บ้านพัก"}, {"k": "C", "t": "ทำตามที่เจ้าหน้าที่บอกตรงหน้า และพร้อมเปลี่ยนตามประกาศใหม่ทุกครั้ง", "tags": ["S", "P"], "out": "ประกาศใหม่ให้ไปขึ้นรถที่ลานด้านบน ทุกคนไปตามทันที"}, {"k": "D", "t": "คิดล่วงหน้าว่าศูนย์ใหม่จะต้องใช้อะไร แล้วจัดของในเป้ให้พร้อมก่อนออกเดิน", "tags": ["N", "J"], "out": "เมื่อรถมาถึง เป้ของทุกคนมีน้ำ ไฟฉาย และยาพร้อม"}]}];
+const T = 32, COLS = 24, ROWS = 14;
+const C = { bone: "#eaf0ee", amber: "#f0a43a", red: "#e2483a", green: "#8fbf6a", sea: "#4fa3c7" };
+
+// ---------- characters ----------
+const CHARS = [
+  { id: "ek", name: "เอก", role: "หัวหน้ากลุ่ม", color: "#f2a33a", p: { hair: "#1f1a17", skin: "#e9bf98", shirt: "#f2a33a", bottom: "#2b3552", shoe: "#3a2a22", eye: "#1a1a1a" } },
+  { id: "waen", name: "แว่น", role: "เด็กเนิร์ด", color: "#6fb3c8", p: { hair: "#2a211c", skin: "#f1c9a5", shirt: "#6fb3c8", bottom: "#2b3552", shoe: "#3a2a22", eye: "#1a1a1a", glasses: true } },
+  { id: "fah", name: "ฟ้า", role: "นายกสโมสร", color: "#d98fb0", p: { hair: "#3a2318", skin: "#f3cdb0", shirt: "#d98fb0", bottom: "#33304f", shoe: "#3a2a22", eye: "#1a1a1a", long: true } },
+  { id: "bom", name: "บอม", role: "หัวโจก", color: "#e5372c", p: { hair: "#141210", skin: "#d9a57e", shirt: "#e5372c", bottom: "#2a2f3a", shoe: "#222", eye: "#1a1a1a", spiky: true } },
+  { id: "uan", name: "อ้วน", role: "สายกิน", color: "#84a65a", p: { hair: "#2a1d14", skin: "#efc39c", shirt: "#84a65a", bottom: "#3b3a33", shoe: "#3a2a22", eye: "#1a1a1a", wide: true } },
+];
+const KID = { name: "เด็กหลงทาง", color: "#f0d36a", p: { hair: "#3a2a1c", skin: "#f3cdb0", shirt: "#f0d36a", bottom: "#4b6fa0", shoe: "#3a2a22", eye: "#1a1a1a", kid: true } };
+const NAMECOL = Object.fromEntries(CHARS.map((c) => [c.name, c.color]));
+
+function drawChar(g, ox, oy, dir, frame, p, s = 2) {
+  if (p.kid) { const s2 = s * 0.75; ox += 8 * (s - s2); oy += 24 * (s - s2); s = s2; }
+  const b = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(ox + x * s, oy + y * s, w * s, h * s); };
+  const bob = frame % 2 ? -1 : 0;
+  g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(ox + 4 * s, oy + 22 * s, 8 * s, 2 * s);
+  const legL = frame === 1 ? 1 : frame === 3 ? -1 : 0, legR = -legL;
+  b(5, 19 + Math.max(0, -legL), 2, 3 + legL - Math.max(0, -legL), p.skin);
+  b(9, 19 + Math.max(0, -legR), 2, 3 + legR - Math.max(0, -legR), p.skin);
+  b(5, 21 + legL, 2, 1, p.shoe); b(9, 21 + legR, 2, 1, p.shoe);
+  const bx = p.wide ? 3 : 4, bw = p.wide ? 10 : 8;
+  b(bx, 17 + bob, bw, 3, p.bottom);
+  b(bx, 12 + bob, bw, 5, p.shirt);
+  const sw = frame === 1 ? 1 : frame === 3 ? -1 : 0;
+  if (dir === 0 || dir === 3) { b(bx - 1, 12 + bob + Math.max(0, sw), 1, 4, p.skin); b(bx + bw, 12 + bob + Math.max(0, -sw), 1, 4, p.skin); }
+  else if (dir === 1) b(7 + sw, 13 + bob, 2, 4, p.skin);
+  else b(7 - sw, 13 + bob, 2, 4, p.skin);
+  const hy = 2 + bob;
+  b(3, hy, 10, 10, p.hair);
+  if (p.long) { b(2, hy + 2, 1, 10, p.hair); b(13, hy + 2, 1, 10, p.hair); }
+  if (dir === 0) { b(4, hy + 4, 8, 6, p.skin); b(4, hy + 3, 3, 1, p.skin); b(10, hy + 3, 2, 1, p.skin); b(5, hy + 6, 1, 2, p.eye); b(10, hy + 6, 1, 2, p.eye); if (p.glasses) { b(4, hy + 5, 3, 1, "#3d3a36"); b(9, hy + 5, 3, 1, "#3d3a36"); } b(7, hy + 9, 2, 1, "#c98f78"); }
+  else if (dir === 1) { b(3, hy + 4, 6, 6, p.skin); b(4, hy + 6, 1, 2, p.eye); if (p.glasses) b(3, hy + 5, 3, 1, "#3d3a36"); b(3, hy + 9, 2, 1, "#c98f78"); }
+  else if (dir === 2) { b(7, hy + 4, 6, 6, p.skin); b(11, hy + 6, 1, 2, p.eye); if (p.glasses) b(10, hy + 5, 3, 1, "#3d3a36"); b(11, hy + 9, 2, 1, "#c98f78"); }
+  else { b(3, hy + 9, 10, 1, p.hair); }
+  b(3, hy, 10, 1, p.hair); b(4, hy - 1, 8, 1, p.hair);
+  if (p.spiky) { b(4, hy - 2, 1, 1, p.hair); b(7, hy - 2, 1, 1, p.hair); b(10, hy - 2, 1, 1, p.hair); }
+}
+
+// ---------- tiles ----------
+const px = (g, x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+const hash = (x, y) => ((x * 73856093) ^ (y * 19349663)) >>> 0;
+function grass(g, x, y, tx, ty) { px(g, x, y, T, T, "#3f6b35"); const h = hash(tx, ty); for (let i = 0; i < 4; i++) px(g, x + ((h >> (i * 3)) % 28), y + ((h >> (i * 4 + 2)) % 26) + 2, 2, 4, "#4f8042"); }
+function sand(g, x, y, tx, ty) { px(g, x, y, T, T, "#d6bf8a"); const h = hash(tx, ty); for (let i = 0; i < 5; i++) px(g, x + ((h >> (i * 3)) % 30), y + ((h >> (i * 5 + 1)) % 30), 2, 2, "#c4ab74"); }
+function road(g, x, y) { px(g, x, y, T, T, "#3b3e44"); px(g, x + 6, y + 20, 2, 2, "#45484f"); px(g, x + 22, y + 8, 2, 2, "#34373c"); }
+function lane(g, x, y) { road(g, x, y); px(g, x + 4, y + 15, 14, 3, "#e3c25a"); }
+function walk(g, x, y) { px(g, x, y, T, T, "#8f8b82"); px(g, x, y + 15, T, 1, "#7b776f"); px(g, x + 15, y, 1, 15, "#7b776f"); px(g, x + 7, y + 16, 1, 16, "#7b776f"); px(g, x, y, T, 1, "#a19d93"); }
+function dirt(g, x, y, tx, ty) { px(g, x, y, T, T, "#8b6a45"); const h = hash(tx, ty); for (let i = 0; i < 4; i++) px(g, x + ((h >> (i * 3)) % 28), y + ((h >> (i * 4)) % 28), 3, 2, "#7a5b3a"); }
+function wallH(g, x, y, tx) { px(g, x, y, T, T, "#c9b896"); px(g, x, y + 28, T, 4, "#a8987a"); px(g, x + 7, y + 6, 18, 14, "#3a5566"); px(g, x + 7, y + 6, 18, 2, "#5b7a8b"); px(g, x + 15, y + 6, 2, 14, "#c9b896"); }
+function roof(g, x, y, tx, ty) { const c = ["#8a4b3a", "#5f646c", "#6d5a7a", "#4f6b5a"][(Math.floor(tx / 4) + ty) % 4]; px(g, x, y, T, T, c); px(g, x, y + 30, T, 2, "rgba(0,0,0,.25)"); for (let i = 0; i < 4; i++) px(g, x, y + i * 8 + 6, T, 1, "rgba(0,0,0,.18)"); }
+function cracked(g, x, y, tx) { wallH(g, x, y, tx); g.strokeStyle = "#3a2c22"; g.lineWidth = 2; g.beginPath(); g.moveTo(x + 4, y + 2); g.lineTo(x + 12, y + 12); g.lineTo(x + 9, y + 20); g.lineTo(x + 18, y + 30); g.moveTo(x + 26, y + 4); g.lineTo(x + 20, y + 14); g.stroke(); }
+function palm(g, x, y, tx, ty) { sand(g, x, y, tx, ty); px(g, x + 14, y + 12, 4, 18, "#7a5a3a"); px(g, x + 4, y + 6, 24, 6, "#3f8a3a"); px(g, x + 10, y + 2, 12, 6, "#4f9e46"); px(g, x + 2, y + 10, 6, 4, "#3f8a3a"); px(g, x + 24, y + 10, 6, 4, "#3f8a3a"); }
+function tree(g, x, y, tx, ty) { grass(g, x, y, tx, ty); px(g, x + 8, y + 28, 18, 3, "rgba(0,0,0,.3)"); px(g, x + 14, y + 20, 4, 9, "#6a4a30"); px(g, x + 4, y + 4, 24, 18, "#2f5a2a"); px(g, x + 7, y + 2, 16, 4, "#3a6b33"); px(g, x + 8, y + 7, 6, 4, "#46803d"); }
+function kiosk(g, x, y, tx, ty) { sand(g, x, y, tx, ty); for (let i = 0; i < 4; i++) px(g, x + i * 8, y + 4, 8, 10, i % 2 ? "#f2f0e8" : "#e2483a"); px(g, x + 2, y + 14, 28, 14, "#8b6a3e"); px(g, x + 2, y + 14, 28, 3, "#a5804d"); }
+function bench(g, x, y, tx, ty) { sand(g, x, y, tx, ty); px(g, x + 3, y + 12, 26, 6, "#8b6a3e"); px(g, x + 3, y + 8, 26, 3, "#a5804d"); px(g, x + 5, y + 18, 3, 8, "#5a4428"); px(g, x + 24, y + 18, 3, 8, "#5a4428"); }
+function sign(g, x, y) { walk(g, x, y); px(g, x + 15, y + 14, 3, 16, "#9aa3a8"); px(g, x + 4, y + 2, 24, 16, "#1f5fa8"); px(g, x + 4, y + 2, 24, 2, "#e8eef5"); px(g, x + 7, y + 11, 6, 3, "#e8eef5"); px(g, x + 11, y + 7, 4, 4, "#e8eef5"); px(g, x + 18, y + 8, 7, 2, "#e8eef5"); px(g, x + 23, y + 6, 2, 6, "#e8eef5"); }
+function car(g, x, y, tx) { road(g, x, y); const left = tx % 2 === 0; px(g, x + (left ? 4 : 0), y + 6, left ? 28 : 28, 22, "#c0392b"); px(g, x + (left ? 10 : 0), y + 8, 16, 8, "#9fc6d8"); px(g, x + (left ? 6 : 20), y + 26, 6, 4, "#151515"); }
+function tent(g, x, y, tx, ty) { grass(g, x, y, tx, ty); g.fillStyle = (tx % 2) ? "#e9eef0" : "#3d79b0"; g.beginPath(); g.moveTo(x + 2, y + 28); g.lineTo(x + 16, y + 4); g.lineTo(x + 30, y + 28); g.fill(); px(g, x + 13, y + 16, 6, 12, "#24323a"); }
+function lit(g, x, y, t) { wallH(g, x, y); const on = Math.floor(t / 300) % 2 === 0; px(g, x + 7, y + 6, 18, 14, on ? "#fff3b0" : "#3a5566"); if (on) { g.fillStyle = "rgba(255,243,176,.25)"; g.fillRect(x - 6, y - 6, T + 12, T + 12); } }
+function sea(g, x, y, tx, ty, t) { px(g, x, y, T, T, "#1f5f86"); const o = Math.floor((t / 90 + tx * 5 + ty * 9) % 32); px(g, x + (o % 32), y + 8, 10, 2, "#5aa8cf"); px(g, x + ((o + 16) % 32), y + 22, 8, 2, "#3f8ab3"); }
+function exitT(g, x, y, base, tx, ty, t, dir) {
+  base(g, x, y, tx, ty); const a = 0.55 + 0.3 * Math.sin(t / 250);
+  g.fillStyle = `rgba(143,191,106,${a})`; g.fillRect(x + 1, y + 1, T - 2, T - 2);
+  const o = Math.round(Math.sin(t / 180) * 2);
+  g.fillStyle = "#0d2a0a"; g.beginPath();
+  if (dir === "right") { g.moveTo(x + 9 + o, y + 7); g.lineTo(x + 25 + o, y + 16); g.lineTo(x + 9 + o, y + 25); }
+  else { g.moveTo(x + 7, y + 23 + o); g.lineTo(x + 16, y + 7 + o); g.lineTo(x + 25, y + 23 + o); }
+  g.closePath(); g.fill();
+}
+
+const SOLID = new Set(["~", "H", "R", "Z", "L", "P", "t", "K", "b", "T", "C", "n"]);
+function drawStatic(g, ch, x, y, tx, ty, scene) {
+  switch (ch) {
+    case "g": return grass(g, x, y, tx, ty); case "s": return sand(g, x, y, tx, ty); case "r": return road(g, x, y); case "=": return lane(g, x, y);
+    case "w": return walk(g, x, y); case "d": return dirt(g, x, y, tx, ty); case "H": return wallH(g, x, y, tx); case "R": return roof(g, x, y, tx, ty);
+    case "Z": return cracked(g, x, y, tx); case "P": return palm(g, x, y, tx, ty); case "t": return tree(g, x, y, tx, ty); case "K": return kiosk(g, x, y, tx, ty);
+    case "b": return bench(g, x, y, tx, ty); case "T": return sign(g, x, y); case "C": return car(g, x, y, tx); case "n": return tent(g, x, y, tx, ty);
+    case "L": return wallH(g, x, y); case "~": return px(g, x, y, T, T, "#1f5f86"); case "X": return;
+    default: return grass(g, x, y, tx, ty);
+  }
+}
+
+// ---------- scenes ----------
+const norm = (rows) => rows.map((r) => (r + r.slice(-1).repeat(COLS)).slice(0, COLS));
+const SCENES = [
+  {
+    name: "ชายหาด", clock: "14:37", sub: "เสียงไซเรนดังทั่วเมือง น้ำทะเลลดลงผิดปกติ คลื่นยักษ์กำลังมา ทุกคนต้องขึ้นจากชายหาดไปที่ถนนใหญ่ให้เร็วที่สุด",
+    exitBase: "r",
+    map: norm([
+      "RRRRRRRRRwrXXrwRRRRRRRRR",
+      "HHHHHHHHHwrrrrwHHHHHHHHH",
+      "wwwwwwwwwwrrrrwwwwwwwwww",
+      "rrrrrrrrrrrrrrrrrrrrrrrr",
+      "========================",
+      "rrrrrrrrrrrrrrrrrrCCrrrr",
+      "wwwwwTwwwwwwwwwwwwwwwwww",
+      "gggPggggggggggggggPggggg",
+      "sssssssKKsssssssssssssss",
+      "ssPsssssssssssbsssssssPs",
+      "ssssssssssssssssssssssss",
+      "ssssssssssssssssssssssss",
+      "~~~~~~~~~~~~~~~~~~~~~~~~",
+      "~~~~~~~~~~~~~~~~~~~~~~~~",
+    ]),
+    start: [11, 10], events: [{ q: 1, x: 11, y: 9 }, { q: 3, x: 16, y: 8, kid: true }, { q: 2, x: 6, y: 6 }],
+    items: [{ k: "water", x: 3, y: 9 }, { k: "snack", x: 10, y: 8 }],
+    flood: { dir: "up", from: 12, cap: 7, every: 6000, after: 1 },
+  },
+  {
+    name: "ตัวเมือง", clock: "14:52", sub: "น้ำทะลักเข้าถนนจากฝั่งซ้าย ตึกบางหลังร้าวจากแผ่นดินไหว ต้องข้ามตัวเมืองไปทางขวาเพื่อขึ้นเนิน",
+    exitBase: "r", exitDir: "right",
+    map: norm([
+      "RRRRRRRwrrwRRRRRRRwrrwRR",
+      "HHHHHHHwrrwHHZZHHHwrrwHH",
+      "wwwwwwwwrrwwwwwwwwwrrwww",
+      "rrrrrrrrrrrrrrrrrrrrrrrX",
+      "=======================X",
+      "rrrrrrrrrrrrrrrrrrrrrrrX",
+      "wwwwwwwwrrwwwwwwwwwrrwww",
+      "RRRRRRRwrrwRRRRRRRwrrwRR",
+      "HHHHHHHwrrwHHHLHHHwrrwHH",
+      "wwwwwwwwrrwwwwwwwwwrrwww",
+      "rrrrrrrrrrrrCrrrrrrrrrrr",
+      "rrrrrrrrrrrrrrrrrrrrrrrr",
+      "wwwwwwwwwwwwwwwwwwwwwwww",
+      "RRRRRRRRRRRRRRRRRRRRRRRR",
+    ]),
+    start: [0, 4], events: [{ q: 4, x: 13, y: 2 }, { q: 5, x: 9, y: 9 }, { q: 6, x: 14, y: 9 }, { q: 7, x: 20, y: 11 }],
+    items: [{ k: "med", x: 2, y: 9 }, { k: "light", x: 16, y: 12 }, { k: "water", x: 5, y: 2 }],
+    flood: { dir: "right", from: -1, cap: 17, every: 6500, after: 0 },
+  },
+  {
+    name: "เนินเขา", clock: "15:40", sub: "ทางดินคดเคี้ยวขึ้นเนิน ด้านบนคือศูนย์อพยพ ของในเป้เริ่มเหลือน้อย ทุกคนเหนื่อยมาก",
+    exitBase: "d",
+    map: norm([
+      "tttgggnnngggXXgggnnngttt",
+      "ttgggggggggddggggggggggt",
+      "tgggnngggggddgggggnngggt",
+      "tgggggggggdddggggggggggt",
+      "ggtgggggggddggggggggtggg",
+      "ggggggggddddgggggggggggg",
+      "gggggggdddggggggtggggggt",
+      "tggggggddgggggggggggggtt",
+      "ttgggggddddgggggggggggtt",
+      "tggtggggggddddgggggtgggt",
+      "gggggggggggggdddgggggggg",
+      "ggggggtgggggggggdddggggg",
+      "gggggggggggggggggggddddd",
+      "ttttttttttttttttttttdddd",
+    ]),
+    start: [22, 12], events: [{ q: 8, x: 13, y: 10 }, { q: 9, x: 11, y: 3 }, { q: 10, x: 12, y: 1 }],
+    items: [{ k: "water", x: 5, y: 11 }, { k: "snack", x: 18, y: 6 }],
+    flood: { dir: "up", from: 14, cap: 9, every: 1200, after: 3 },
+  },
+];
+const ITEM_INFO = { water: { n: "น้ำดื่ม", eff: { water: 35 } }, snack: { n: "ขนมปัง", eff: { food: 30 } }, med: { n: "ชุดปฐมพยาบาล", eff: { hp: 30 } }, light: { n: "ไฟฉาย", eff: {} } };
+
+// ---------- state ----------
+let S, scene, sceneSnap;
+const QBY = Object.fromEntries(QS.map((q) => [q.n, q]));
+function newGame(charIdx) {
+  S = {
+    me: charIdx, hp: 100, food: 75, water: 65, answers: [], times: [], steps: 0, explored: 0, hits: 0, got: 0, kid: false,
+    sceneIdx: 0, over: false, paused: true,
+  };
+  loadScene(0);
+}
+function loadScene(i) {
+  S.sceneIdx = i; scene = SCENES[i];
+  S.map = scene.map;
+  S.p = { x: scene.start[0], y: scene.start[1], dir: i === 1 ? 2 : 3, frame: 0, moving: false, from: null, t0: 0, stepN: 0 };
+  const team = CHARS.filter((_, k) => k !== S.me).map((c) => c.p);
+  if (S.kid) team.push(KID.p);
+  S.fol = team.map((p) => ({ p, x: S.p.x, y: S.p.y, from: null, dir: S.p.dir, frame: 0 }));
+  S.events = scene.events.map((e) => ({ ...e, done: false }));
+  S.items = scene.items.map((it) => ({ ...it, got: false }));
+  S.flood = scene.flood.from; S.floodOn = scene.flood.after === 0; S.floodT = 0; S.dmgT = 0;
+  S.visited = new Set([S.p.x + "," + S.p.y]);
+  sceneSnap = JSON.parse(JSON.stringify({ ...S, visited: null }));
+  buildBg(); renderHud();
+  showSceneCard();
+}
+const solidAt = (x, y) => x < 0 || y < 0 || x >= COLS || y >= ROWS || SOLID.has(S.map[y][x]);
+const tileAt = (x, y) => S.map[y]?.[x] ?? "#";
+const flooded = (x, y) => scene.flood.dir === "up" ? y >= S.flood : x <= S.flood;
+
+// ---------- drawing ----------
+const cv = document.getElementById("cv"), g = cv.getContext("2d"); g.imageSmoothingEnabled = false;
+const bg = document.createElement("canvas"); bg.width = cv.width; bg.height = cv.height; const bgc = bg.getContext("2d");
+function buildBg() {
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const ch = S.map[y][x];
+    if (ch === "X") drawStatic(bgc, scene.exitBase, x * T, y * T, x, y); else drawStatic(bgc, ch, x * T, y * T, x, y);
+  }
+}
+function drawItem(g, kind, x, y, t) {
+  const by = Math.round(Math.sin(t / 300) * 2);
+  g.fillStyle = "rgba(0,0,0,.3)"; g.fillRect(x + 9, y + 25, 14, 3);
+  const r = (a, b, w, h, c) => { g.fillStyle = c; g.fillRect(x + a, y + b + by, w, h); };
+  if (kind === "water") { r(12, 6, 8, 3, "#cfe8f2"); r(11, 9, 10, 15, "#6fb3c8"); r(13, 12, 2, 9, "#bfe2ee"); }
+  else if (kind === "snack") { r(8, 9, 16, 14, "#e08a2e"); r(8, 9, 16, 3, "#f3b35c"); r(12, 14, 8, 4, "#fff1d6"); }
+  else if (kind === "med") { r(7, 9, 18, 14, "#eeeae0"); r(14, 11, 4, 10, "#e2483a"); r(11, 14, 10, 4, "#e2483a"); }
+  else if (kind === "light") { r(8, 13, 12, 6, "#3a3f46"); r(20, 11, 5, 10, "#c9c3b4"); r(25, 12, 3, 8, "#fff3b0"); }
+}
+function drawMarker(g, x, y, t) {
+  const by = Math.round(Math.sin(t / 220) * 3);
+  g.save(); g.translate(x + 16, y + 6 + by); g.rotate(Math.PI / 4);
+  g.fillStyle = "#f0a43a"; g.fillRect(-8, -8, 16, 16); g.strokeStyle = "#071014"; g.lineWidth = 2; g.strokeRect(-8, -8, 16, 16); g.restore();
+  g.fillStyle = "#071014"; g.fillRect(x + 15, y + by, 3, 7); g.fillRect(x + 15, y + 9 + by, 3, 3);
+}
+function lerp(o, now) { if (!o.from) return [o.x, o.y]; const k = Math.min(1, (now - o.t0) / 140); return [o.from[0] + (o.x - o.from[0]) * k, o.from[1] + (o.y - o.from[1]) * k]; }
+function draw(now) {
+  g.drawImage(bg, 0, 0);
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const ch = S.map[y][x];
+    if (ch === "~") sea(g, x * T, y * T, x, y, now);
+    else if (ch === "L") lit(g, x * T, y * T, now);
+    else if (ch === "X") exitT(g, x * T, y * T, (gg, a, b, c, d) => drawStatic(gg, scene.exitBase, a, b, c, d), x, y, now, scene.exitDir);
+  }
+  // flood overlay
+  if (scene.flood) {
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      if (!flooded(x, y) || S.map[y][x] === "~") continue;
+      g.fillStyle = "rgba(38,110,150,.72)"; g.fillRect(x * T, y * T, T, T);
+      const o = Math.floor((now / 110 + x * 7 + y * 3) % 32);
+      g.fillStyle = "rgba(140,200,225,.55)"; g.fillRect(x * T + o % 32, y * T + 10, 9, 2);
+    }
+    // foam edge
+    g.fillStyle = "rgba(230,245,250,.7)";
+    if (scene.flood.dir === "up" && S.flood < ROWS) for (let x = 0; x < COLS; x++) g.fillRect(x * T, S.flood * T - 2 + Math.round(Math.sin(now / 200 + x) * 2), T, 3);
+    if (scene.flood.dir === "right" && S.flood >= 0) for (let y = 0; y < ROWS; y++) g.fillRect((S.flood + 1) * T - 2 + Math.round(Math.sin(now / 200 + y) * 2), y * T, 3, T);
+  }
+  const ents = [];
+  S.items.forEach((it) => { if (!it.got) ents.push({ y: it.y, d: () => drawItem(g, it.k, it.x * T, it.y * T, now) }); });
+  S.events.forEach((e) => {
+    if (e.done) return;
+    if (e.kid) ents.push({ y: e.y, d: () => { drawChar(g, e.x * T, e.y * T - 16, 0, 0, KID.p); drawMarker(g, e.x * T, e.y * T - 30, now); } });
+    else ents.push({ y: e.y, d: () => drawMarker(g, e.x * T, e.y * T, now) });
+  });
+  S.fol.forEach((f) => { const [fx, fy] = lerp(f, now); ents.push({ y: fy - 0.01, d: () => drawChar(g, Math.round(fx * T), Math.round(fy * T - 16), f.dir, f.frame, f.p) }); });
+  const [pxx, pyy] = lerp(S.p, now);
+  ents.push({ y: pyy + 0.01, d: () => drawChar(g, Math.round(pxx * T), Math.round(pyy * T - 16), S.p.dir, S.p.frame, CHARS[S.me].p) });
+  ents.sort((a, b) => a.y - b.y).forEach((e) => e.d());
+  if (S.hitFlash && now - S.hitFlash < 260) { g.fillStyle = "rgba(226,72,58,.25)"; g.fillRect(0, 0, cv.width, cv.height); }
+}
+
+// ---------- movement ----------
+const DIRS = { "0,1": 0, "-1,0": 1, "1,0": 2, "0,-1": 3 };
+function tryMove(dx, dy) {
+  if (S.paused || S.over || S.p.moving) return;
+  const now = performance.now(); S.p.dir = DIRS[dx + "," + dy];
+  const nx = S.p.x + dx, ny = S.p.y + dy;
+  if (solidAt(nx, ny)) return;
+  // followers shift
+  let prev = [S.p.x, S.p.y], prevDir = S.p.dir;
+  S.fol.forEach((f) => {
+    const cur = [f.x, f.y];
+    if (cur[0] !== prev[0] || cur[1] !== prev[1]) { f.from = cur; f.t0 = now; f.dir = DIRS[Math.sign(prev[0] - cur[0]) + "," + Math.sign(prev[1] - cur[1])] ?? f.dir; f.x = prev[0]; f.y = prev[1]; f.frame = (S.p.stepN % 2) ? 3 : 1; }
+    prev = cur;
+  });
+  S.p.from = [S.p.x, S.p.y]; S.p.x = nx; S.p.y = ny; S.p.t0 = now; S.p.moving = true;
+  S.p.stepN++; S.p.frame = S.p.stepN % 2 ? 1 : 3;
+  S.steps++; S.visited.add(nx + "," + ny);
+  S.food = Math.max(0, S.food - 0.35); S.water = Math.max(0, S.water - 0.5);
+  if (S.food === 0 || S.water === 0) S.hp = Math.max(0, S.hp - 1);
+  setTimeout(() => { S.p.moving = false; S.p.frame = 0; S.p.from = null; S.fol.forEach((f) => { f.frame = 0; f.from = null; }); arrive(); }, 140);
+}
+function arrive() {
+  const { x, y } = S.p;
+  const it = S.items.find((i) => !i.got && i.x === x && i.y === y);
+  if (it) {
+    it.got = true; S.got++; const inf = ITEM_INFO[it.k];
+    if (inf.eff.water) S.water = Math.min(100, S.water + inf.eff.water);
+    if (inf.eff.food) S.food = Math.min(100, S.food + inf.eff.food);
+    if (inf.eff.hp) S.hp = Math.min(100, S.hp + inf.eff.hp);
+    toast("เก็บ " + inf.n);
+  }
+  const ev = S.events.find((e) => !e.done && e.x === x && e.y === y);
+  if (ev) openEvent(ev);
+  if (tileAt(x, y) === "X") {
+    const left = S.events.filter((e) => !e.done).length;
+    if (left) toast("ยังเหลือเหตุการณ์อีก " + left + " จุดในฉากนี้", true);
+    else nextScene();
+  }
+  checkDeath(); renderHud();
+}
+function tick(now, dt) {
+  if (S.paused || S.over) return;
+  if (S.floodOn && scene.flood) {
+    S.floodT += dt;
+    if (S.floodT >= scene.flood.every) {
+      S.floodT = 0;
+      if (scene.flood.dir === "up" && S.flood > scene.flood.cap) S.flood--;
+      if (scene.flood.dir === "right" && S.flood < scene.flood.cap) S.flood++;
+    }
+  }
+  if (flooded(S.p.x, S.p.y)) {
+    S.dmgT += dt;
+    if (S.dmgT >= 1000) { S.dmgT = 0; S.hp = Math.max(0, S.hp - 8); S.hits++; S.hitFlash = now; toast("น้ำท่วมถึงตัว รีบหนีขึ้นที่สูง!", true); renderHud(); checkDeath(); }
+  } else S.dmgT = 0;
+}
+function checkDeath() {
+  if (S.hp > 0 || S.over) return;
+  S.over = true;
+  openCard(`<span class="eyebrow" style="color:var(--red)">ไม่รอด</span><h2>น้ำพัดคุณไปก่อนถึงที่สูง</h2><p class="dim">ในเกมจริง ตรงนี้จะเป็นฉากจบแบบไม่รอด ลองใหม่ได้ตั้งแต่ต้นฉาก${scene.name}</p><button class="primary" id="retry">ลองฉากนี้อีกครั้ง</button>`, true);
+  document.getElementById("retry").onclick = () => { const snap = JSON.parse(JSON.stringify(sceneSnap)); Object.assign(S, snap); S.over = false; S.visited = new Set(); loadScene(S.sceneIdx); };
+}
+
+// ---------- UI ----------
+const hud = document.getElementById("hud"), chip = document.getElementById("chip");
+const bar = (n, v, c) => `<div class="meter"><span>${n} ${Math.round(v)}</span><div class="bar"><i style="width:${v}%;background:${c}"></i></div></div>`;
+function renderHud() {
+  if (!S) return;
+  hud.innerHTML = bar("พลังชีวิต", S.hp, C.red) + bar("อาหาร", S.food, C.amber) + bar("น้ำ", S.water, C.sea);
+  const done = S.events ? S.events.filter((e) => e.done).length : 0;
+  chip.textContent = `${scene.clock} น. · ฉาก ${S.sceneIdx + 1}/3 ${scene.name} · เหตุการณ์ ${done}/${S.events.length}`;
+}
+let toastT; const toastEl = document.getElementById("toast");
+function toast(t, bad) { toastEl.textContent = t; toastEl.style.borderColor = bad ? C.red : C.green; toastEl.style.color = bad ? C.red : C.green; toastEl.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (toastEl.hidden = true), 1800); }
+const modal = document.getElementById("modal"), card = document.getElementById("card");
+function openCard(html, warn) { if (S) S.paused = true; card.className = "card" + (warn ? " warn" : ""); card.innerHTML = html; modal.hidden = false; const f = card.querySelector("button"); f && f.focus(); }
+function closeCard() { modal.hidden = true; if (S && !S.over) S.paused = false; }
+
+function showSceneCard() {
+  openCard(`<span class="eyebrow">ฉาก ${S.sceneIdx + 1}/3 · ${scene.clock} น.</span><h2>${scene.name}</h2><p class="dim">${scene.sub}</p><button class="primary" id="go">เริ่มเดิน</button>`);
+  document.getElementById("go").onclick = closeCard;
+}
+function openEvent(ev) {
+  const q = QBY[ev.q]; const t0 = performance.now();
+  const lines = q.lines.map(([n, s]) => `<div><b style="color:${NAMECOL[n] || C.bone}">${n}:</b> “${s}”</div>`).join("");
+  openCard(`<span class="eyebrow">ข้อ ${q.n}/10 · ${q.title}</span><p>${q.text.join(" ")}</p>${lines ? `<div class="say">${lines}</div>` : ""}<p style="font-weight:600">คุณจะทำอย่างไร?</p><div class="opts">${q.opts.map((o, i) => `<button data-i="${i}">${o.k}. ${o.t}</button>`).join("")}</div>`);
+  card.querySelectorAll("button[data-i]").forEach((b) => b.onclick = () => {
+    const o = q.opts[+b.dataset.i];
+    S.answers.push({ q: q.n, k: o.k, tags: o.tags }); S.times.push(performance.now() - t0);
+    ev.done = true;
+    if (ev.kid && !S.kid) { S.kid = true; S.fol.push({ p: KID.p, x: ev.x, y: ev.y, from: null, dir: 0, frame: 0 }); }
+    const doneN = S.events.filter((e) => e.done).length;
+    if (scene.flood && !S.floodOn && doneN >= scene.flood.after) { S.floodOn = true; }
+    const extra = scene.flood && scene.flood.after > 0 && doneN === scene.flood.after ? (S.sceneIdx === 2 ? `<p style="color:var(--red)">เสียงไซเรนดังขึ้นอีกครั้ง คลื่นระลอกใหม่ซัดเข้าตีนเนิน รีบไปที่จุดขึ้นรถด้านบน!</p>` : `<p style="color:var(--red)">น้ำทะเลเริ่มซัดขึ้นชายหาดแล้ว รีบขึ้นไปที่ถนนใหญ่!</p>`) : "";
+    const allDone = doneN === S.events.length;
+    openCard(`<span class="eyebrow">ข้อ ${q.n}/10 · ผลที่ตามมา</span><p>${o.out}</p>${extra}${allDone ? `<p class="dim">เจอเหตุการณ์ครบแล้ว ไปที่ลูกศรสีเขียวเพื่อไปต่อ</p>` : ""}<button class="primary" id="cont">เดินต่อ</button>`);
+    document.getElementById("cont").onclick = () => { closeCard(); renderHud(); };
+    renderHud();
+  });
+}
+function nextScene() {
+  if (S.sceneIdx < SCENES.length - 1) { loadScene(S.sceneIdx + 1); return; }
+  S.over = true; showResult();
+}
+function showResult() {
+  const cnt = { E: 0, I: 0, S: 0, N: 0, T: 0, F: 0, J: 0, P: 0 };
+  S.answers.forEach((a) => a.tags.forEach((t) => cnt[t]++));
+  const pairs = [["E", "I"], ["S", "N"], ["T", "F"], ["J", "P"]];
+  const type = pairs.map(([a, b]) => (cnt[a] >= cnt[b] ? a : b)).join("");
+  const avg = S.times.length ? (S.times.reduce((a, b) => a + b, 0) / S.times.length / 1000).toFixed(1) : "–";
+  const bars = pairs.map(([a, b]) => { const tot = cnt[a] + cnt[b] || 1; return `<div class="pair"><span>${a}</span><div class="track"><i style="width:${cnt[a] / tot * 100}%"></i></div><span>${b}</span></div>`; }).join("");
+  openCard(`<span class="eyebrow" style="color:var(--green)">รอดชีวิต · 16:05 น.</span><h2>ทุกคนขึ้นรถไปศูนย์อพยพแห่งใหม่${S.kid ? " พร้อมเด็กที่ช่วยมา" : ""}</h2>
+    <p class="dim">ทุกการตัดสินใจถูกบันทึกไว้แล้ว… คุณรอดจากคลื่นยักษ์ แต่คุณรู้จักตัวเองดีแค่ไหน?</p>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><span class="big">${type}</span><span class="dim" style="font-size:13px;max-width:34ch">ผลทดลองจากต้นแบบ นับจากตัวเลือก 10 ข้อ ยังไม่ใช่ผลวิเคราะห์จริงของ SURVIMIND</span></div>
+    <div class="bars">${bars}</div>
+    <div class="stats"><div><b>${S.steps}</b><span>ก้าวที่เดิน</span></div><div><b>${avg} วิ</b><span>เวลาเฉลี่ยก่อนตอบ</span></div><div><b>${S.got}</b><span>ของที่เก็บได้</span></div><div><b>${S.hits}</b><span>ครั้งที่โดนน้ำ</span></div><div><b>${Math.round(S.hp)}</b><span>พลังชีวิตที่เหลือ</span></div></div>
+    <button class="primary" id="again">เล่นอีกครั้ง</button>`);
+  document.getElementById("again").onclick = intro;
+}
+
+// ---------- intro + character pick ----------
+function intro() {
+  S = null; scene = SCENES[0];
+  S = { map: SCENES[0].map, events: [], items: [], fol: [], p: { x: 11, y: 10, dir: 0, frame: 0 }, flood: 99, paused: true, me: 1, hp: 100, food: 75, water: 65, sceneIdx: 0 };
+  buildBg(); renderHud();
+  let pick = 1;
+  openCard(`<span class="eyebrow">14:37 น. · เมืองชายฝั่ง</span><h2>วันที่ทะเลกลืนกินเมือง</h2>
+    <p class="dim">เสียงไซเรนดังสนั่นทั่วเมือง หลังเกิดแผ่นดินไหวใต้ทะเล คลื่นยักษ์กำลังเคลื่อนตัวเข้าหาชายฝั่ง ห้าเพื่อนที่มาออกค่ายอาสาช่วงวันหยุดกำลังเดินเล่นอยู่บนชายหาด</p>
+    <div class="say"><div><b style="color:${NAMECOL["แว่น"]}">แว่น:</b> “น้ำทะเลลดลงผิดปกติ คลื่นกำลังมา เรามีเวลาไม่มากแล้ว!”</div><div><b style="color:${NAMECOL["ฟ้า"]}">ฟ้า:</b> “ใจเย็น ๆ ก่อน ทุกคนต้องไปด้วยกันนะ”</div></div>
+    <p style="font-weight:600">เลือกตัวละครของคุณ อีกสี่คนจะเดินตามคุณ</p>
+    <div class="picks">${CHARS.map((c, i) => `<button class="pick${i === pick ? " on" : ""}" data-c="${i}"><canvas width="32" height="48"></canvas><span style="color:${c.color};font-weight:600">${c.name}</span><small>${c.role}</small></button>`).join("")}</div>
+    <button class="primary" id="startg">เริ่มหนี</button>`);
+  card.querySelectorAll(".pick").forEach((b) => {
+    const cc = b.querySelector("canvas").getContext("2d"); drawChar(cc, 0, 0, 0, 0, CHARS[+b.dataset.c].p);
+    b.onclick = () => { pick = +b.dataset.c; card.querySelectorAll(".pick").forEach((x) => x.classList.toggle("on", x === b)); };
+  });
+  document.getElementById("startg").onclick = () => newGame(pick);
+  document.getElementById("startg").focus();
+}
+
+// ---------- input ----------
+const KEYS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0] };
+const held = [];
+window.addEventListener("keydown", (e) => { if (!KEYS[e.key] || !modal.hidden) return; e.preventDefault(); if (!held.includes(e.key)) held.push(e.key); });
+window.addEventListener("keyup", (e) => { const i = held.indexOf(e.key); if (i >= 0) held.splice(i, 1); });
+window.addEventListener("blur", () => { held.length = 0; });
+let padDir = null;
+document.querySelectorAll(".pad button").forEach((b) => {
+  const d = b.dataset.d.split(",").map(Number);
+  b.addEventListener("pointerdown", (e) => { e.preventDefault(); padDir = d; try { b.setPointerCapture(e.pointerId); } catch (_) {} });
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => b.addEventListener(ev, () => { padDir = null; }));
+});
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (S && S.p && !S.p.moving && !S.paused && !S.over) {
+    const k = held[held.length - 1]; const d = padDir || (k && KEYS[k]);
+    if (d) tryMove(d[0], d[1]);
+  }
+  if (S && S.fol) { tick(now, dt); draw(now); }
+  requestAnimationFrame(loop);
+}
+intro();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
