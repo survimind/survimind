@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SURVIMIND · โหมดเดินสำรวจ (ต้นแบบ)</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column of spec "sheets", each pairing a live drawing with the rule it illustrates. Single dark look = the game's own world. */
+:root {
+  --bg: #121411;
+  --panel: #1b1e1a;
+  --panel2: #242822;
+  --line: #343a32;
+  --bone: #ece6d6;
+  --dim: #a39f92;
+  --amber: #f0a43a;
+  --red: #e2483a;
+  --green: #8fbf6a;
+  --blue: #6fb3c8;
+  --violet: #b98bd9;
+  --f-display: "Chakra Petch", "IBM Plex Sans Thai", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans Thai", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--bone); font-family: var(--f-body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 1060px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; line-height: 1.2; }
+h1 { font-size: clamp(30px, 5vw, 46px); }
+h2 { font-size: clamp(22px, 3.2vw, 30px); }
+h3 { font-size: 18px; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--amber); }
+.dim { color: var(--dim); }
+header { display: flex; flex-direction: column; gap: 14px; }
+header .lede { font-size: 18px; color: var(--dim); }
+.note { border-left: 3px solid var(--amber); padding: 10px 14px; background: var(--panel); color: var(--dim); font-size: 14.5px; max-width: 78ch; }
+.note b { color: var(--bone); }
+section { display: flex; flex-direction: column; gap: 18px; }
+.sec-head { display: flex; flex-direction: column; gap: 6px; }
+.mono { font-family: var(--f-mono); font-size: 13px; }
+code, .tag { font-family: var(--f-mono); font-size: 13px; background: var(--panel2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 3px; color: var(--amber); white-space: nowrap; }
+
+/* game mock */
+.game { position: relative; border: 1px solid var(--line); background: #0b0c0b; }
+.game canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.hud { position: absolute; left: 8px; top: 8px; display: flex; gap: 8px; flex-wrap: wrap; pointer-events: none; }
+.meter { background: rgba(10,11,10,.82); border: 1px solid var(--line); padding: 4px 8px; min-width: 112px; font-size: 12px; line-height: 1.3; }
+.meter .bar { height: 5px; background: #2b2f2a; margin-top: 3px; }
+.meter .bar i { display: block; height: 100%; transition: width .2s; }
+.day { position: absolute; right: 8px; top: 8px; background: rgba(10,11,10,.82); border: 1px solid var(--amber); color: var(--amber); font-family: var(--f-mono); font-size: 12px; padding: 4px 8px; pointer-events: none; }
+.toast { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(10,11,10,.9); border: 1px solid var(--green); color: var(--green); font-size: 13px; padding: 4px 12px; pointer-events: none; white-space: nowrap; }
+.modal { position: absolute; inset: 0; background: rgba(5,6,5,.72); display: grid; place-items: center; padding: 12px; }
+.card { width: min(520px, 100%); background: var(--panel); border: 1px solid var(--amber); padding: 18px; display: flex; flex-direction: column; gap: 10px; max-height: 100%; overflow: auto; }
+.card .opts { display: flex; flex-direction: column; gap: 8px; }
+.card button { text-align: left; }
+button { font: inherit; font-size: 15px; color: var(--bone); background: var(--panel2); border: 1px solid var(--line); padding: 9px 12px; cursor: pointer; }
+button:hover { border-color: var(--amber); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; }
+.toggles { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--dim); }
+.toggles label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.pad { display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(2, 48px); gap: 4px; }
+.pad button { padding: 0; font-size: 20px; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pad .u { grid-column: 2; grid-row: 1; } .pad .l { grid-column: 1; grid-row: 2; } .pad .d { grid-column: 2; grid-row: 2; } .pad .r { grid-column: 3; grid-row: 2; }
+.log { background: var(--panel); border: 1px solid var(--line); padding: 12px 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.log div { display: flex; flex-direction: column; }
+.log b { font-family: var(--f-mono); font-size: 20px; color: var(--violet); font-variant-numeric: tabular-nums; }
+.log span { font-size: 13px; color: var(--dim); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; color: var(--dim); }
+.legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; }
+
+/* spec blocks */
+.spec { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .spec { grid-template-columns: 1fr; } }
+.figure { background: var(--panel); border: 1px solid var(--line); padding: 14px; overflow-x: auto; }
+.figure canvas { display: block; image-rendering: pixelated; max-width: 100%; height: auto; }
+.cap { font-size: 13px; color: var(--dim); margin-top: 8px; }
+ul.rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+ul.rules li::marker { color: var(--amber); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 10px; }
+.tile { background: var(--panel); border: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.tile canvas { width: 64px; height: 64px; image-rendering: pixelated; }
+.tile .n { font-size: 14px; }
+.tile .k { font-family: var(--f-mono); font-size: 11.5px; color: var(--dim); }
+.tile .solid { font-size: 11.5px; color: var(--red); } .tile .walk { font-size: 11.5px; color: var(--green); }
+.tbl { overflow-x: auto; border: 1px solid var(--line); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; color: var(--amber); background: var(--panel); font-weight: 600; }
+td.f { font-family: var(--f-mono); font-size: 13px; color: var(--bone); white-space: nowrap; }
+.steps { counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.step { background: var(--panel); border: 1px solid var(--line); padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.step::before { counter-increment: s; content: counter(s); font-family: var(--f-display); font-size: 26px; color: var(--amber); line-height: 1; }
+.step p { font-size: 14.5px; color: var(--dim); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.choice { background: var(--panel); border: 1px solid var(--line); padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.choice.rec { border-color: var(--green); }
+.choice .badge { align-self: flex-start; font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; padding: 2px 6px; border: 1px solid currentColor; }
+.choice p { font-size: 14.5px; color: var(--dim); }
+a { color: var(--amber); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style><style>
+body { margin: 0; }
+.wrap { gap: 28px; padding-block: 24px 60px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand { font-family: var(--f-display); font-size: 22px; letter-spacing: .04em; } .brand b { color: var(--red); }
+.back { font-size: 14px; }
+.beta { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; color: var(--amber); border: 1px solid var(--amber); padding: 2px 8px; }
+@media (max-width: 640px) {
+  .hud { position: static; padding: 8px; gap: 6px; background: var(--panel); border-top: 1px solid var(--line); }
+  .meter { min-width: 0; flex: 1 1 0; font-size: 11.5px; }
+  .day { position: static; display: block; border: 0; border-top: 1px solid var(--line); text-align: center; }
+  .controls { flex-direction: column-reverse; align-items: stretch; }
+  .pad { align-self: center; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 64px); gap: 6px; }
+  .pad button { font-size: 24px; }
+  .modal { position: fixed; z-index: 50; padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <span class="brand">SURVI<b>MIND</b></span>
+    <span class="beta">PROTOTYPE · ยังไม่เก็บข้อมูล</span>
+    <a class="back" href="../">← กลับไปเกมหลัก</a>
+  </div>
+  <p class="note"><b>นี่คือต้นแบบของโหมดใหม่ที่ทีมกำลังพัฒนา</b> ภาพยังเป็นภาพร่าง และยังไม่บันทึกผลหรือวิเคราะห์ MBTI ข้อมูลที่แสดงด้านล่างอยู่ในเครื่องของคุณเท่านั้น</p>
+<section id="demo">
+    <div class="sec-head">
+      <span class="eyebrow">โหมดเดินสำรวจ · ต้นแบบ</span>
+      <h2>ชั้น 6 ตึกเรียน หลังเกิดเหตุซอมบี้</h2>
+      <p class="dim">คอมใช้ปุ่มลูกศรหรือ WASD มือถือใช้ปุ่มทิศทางใต้ภาพ เดินไปที่เครื่องหมาย <span style="color:var(--amber)">!</span> เพื่อเจอคำถาม เก็บของระหว่างทาง ระวังซอมบี้ แล้วหนีลงบันไดทางขวา</p>
+    </div>
+    <div class="game" id="game">
+      <canvas id="cv" width="768" height="448" aria-label="แผนที่เกมแบบมองจากด้านบน"></canvas>
+      <div class="hud" id="hud"></div>
+      <div class="day">วันที่ 1/7 · ชั้น 6</div>
+      <div class="toast" id="toast" hidden></div>
+      <div class="modal" id="modal" hidden><div class="card" id="card" role="dialog" aria-modal="true"></div></div>
+    </div>
+    <div class="controls">
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+        <div class="toggles">
+          <label><input type="checkbox" id="tg-grid"> แสดงตาราง 32 px</label>
+          <label><input type="checkbox" id="tg-layer"> แสดงเลเยอร์ชนและจุดเหตุการณ์</label>
+          <button id="restart" type="button" style="padding:4px 10px;font-size:14px">เริ่มใหม่</button>
+        </div>
+        <div class="legend" id="legend" hidden>
+          <span><i style="background:rgba(226,72,58,.55)"></i>ช่องที่เดินผ่านไม่ได้ (เลเยอร์ชน)</span>
+          <span><i style="background:var(--amber)"></i>E = จุดเหตุการณ์ (เด้งคำถาม)</span>
+          <span><i style="background:var(--blue)"></i>I = ไอเทม</span>
+          <span><i style="background:var(--green)"></i>Z = จุดเกิดซอมบี้ · P = จุดเริ่ม</span>
+        </div>
+      </div>
+      <div class="pad" aria-label="ปุ่มทิศทาง">
+        <button class="u" data-d="0,-1" aria-label="ขึ้น">▲</button>
+        <button class="l" data-d="-1,0" aria-label="ซ้าย">◀</button>
+        <button class="d" data-d="0,1" aria-label="ลง">▼</button>
+        <button class="r" data-d="1,0" aria-label="ขวา">▶</button>
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-bottom:8px">สิ่งที่ระบบเก็บระหว่างเดิน <span class="dim" style="font-family:var(--f-body);font-size:14px;font-weight:400">(โชว์เฉพาะในเดโมนี้ เกมจริงจะซ่อนไว้)</span></h3>
+      <div class="log" id="log"></div>
+      <p class="cap">ตัวอย่างการเอาไปใช้: สำรวจทั่วแผนที่เยอะ → แนว N · เดินตรงไปเป้าหมาย → แนว S · ใช้เวลาตอบคำถามนาน → นักคิดที่ชั่งใจนาน</p>
+    </div>
+  </section>
+</div>
+<script>
+(() => {
+const T = 32, COLS = 24, ROWS = 14;
+const MAP = [
+  "##BB#####BB######BB#####",
+  "#,,,,,,#,,,,,,,#,,,,,,,#",
+  "#,d,d,,#,d,d,d,#,d,d,,,#",
+  "#,,,,,,#,,,,,,,#,,,,,,,#",
+  "#,d,d,,#,d,d,d,#,d,d,,,#",
+  "#,,,,,,#,,,,,,,#,,,,,,,#",
+  "###D#######D#######D####",
+  "#......................#",
+  "#......................S",
+  "#......................#",
+  "###D####LLLLLLLLLL######",
+  "#..c...#################",
+  "#c....c#################",
+  "########################",
+];
+const SOLID = new Set(["#", "B", "d", "L", "c"]);
+const tileAt = (x, y) => (MAP[y] || "")[x] || "#";
+const solid = (x, y) => SOLID.has(tileAt(x, y));
+const STAINS = new Set(["5,8", "14,7", "18,9", "12,4", "3,11"]);
+
+const C = { bone: "#ece6d6", amber: "#f0a43a", red: "#e2483a", green: "#8fbf6a", blue: "#6fb3c8", ink: "#0b0c0b" };
+
+// ---------- tile painters (32x32, 4px blocks feel) ----------
+function px(g, x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
+function floorTile(g, x, y, tx, ty) {
+  px(g, x, y, T, T, "#3a3e44");
+  px(g, x, y, 16, 16, "#363a40"); px(g, x + 16, y + 16, 16, 16, "#363a40");
+  px(g, x, y + T - 1, T, 1, "#2f3338"); px(g, x + T - 1, y, 1, T, "#2f3338");
+  if (((tx * 7 + ty * 13) % 5) === 0) px(g, x + 20, y + 8, 2, 2, "#454950");
+}
+function woodTile(g, x, y, tx, ty) {
+  px(g, x, y, T, T, "#5f4634");
+  for (let i = 0; i < 4; i++) {
+    px(g, x, y + i * 8 + 7, T, 1, "#4a3628");
+    const off = ((ty + i) % 2) * 16 + (tx % 2) * 8;
+    px(g, x + (off % T), y + i * 8, 1, 7, "#4a3628");
+  }
+  px(g, x + 4, y + 2, 6, 1, "#6d5240");
+}
+function wallTile(g, x, y) {
+  px(g, x, y, T, T, "#24272c");
+  px(g, x, y, T, 4, "#3a3e46");
+  for (let r = 0; r < 3; r++) {
+    px(g, x, y + 10 + r * 8, T, 1, "#1c1e22");
+    const o = r % 2 ? 8 : 0;
+    px(g, x + o + 4, y + 4 + r * 8, 1, 8, "#1c1e22"); px(g, x + o + 20, y + 4 + r * 8, 1, 8, "#1c1e22");
+  }
+}
+function boardTile(g, x, y) {
+  wallTile(g, x, y);
+  px(g, x + 1, y + 8, 30, 20, "#8a6a45"); px(g, x + 3, y + 10, 26, 16, "#2f5a3e");
+  px(g, x + 6, y + 14, 12, 1, "#a9c6a0"); px(g, x + 6, y + 18, 16, 1, "#a9c6a0");
+}
+function doorTile(g, x, y, tx, ty) {
+  floorTile(g, x, y, tx, ty);
+  px(g, x + 2, y, 28, 4, "#7a5532"); px(g, x + 2, y, 3, T, "#7a5532"); px(g, x + 27, y, 3, T, "#7a5532");
+  px(g, x + 5, y + 4, 22, 2, "#1a1b1d");
+}
+function deskTile(g, x, y, tx, ty) {
+  woodTile(g, x, y, tx, ty);
+  px(g, x + 3, y + 24, 26, 4, "rgba(0,0,0,.35)");
+  px(g, x + 2, y + 6, 28, 18, "#b48a5c"); px(g, x + 2, y + 6, 28, 3, "#c9a072"); px(g, x + 2, y + 21, 28, 3, "#8f6a43");
+  px(g, x + 6, y + 10, 8, 6, "#e9e2cf"); px(g, x + 7, y + 12, 6, 1, "#9b9488");
+}
+function lockerTile(g, x, y) {
+  px(g, x, y, T, T, "#45606f"); px(g, x, y, T, 3, "#5d7b8b"); px(g, x + 15, y, 2, T, "#2f4450");
+  for (let i = 0; i < 3; i++) { px(g, x + 4, y + 8 + i * 3, 8, 1, "#2f4450"); px(g, x + 20, y + 8 + i * 3, 8, 1, "#2f4450"); }
+  px(g, x + 11, y + 18, 2, 4, "#c9c3b4"); px(g, x + 19, y + 18, 2, 4, "#c9c3b4");
+}
+function stairsTile(g, x, y) {
+  for (let i = 0; i < 8; i++) px(g, x, y + i * 4, T, 4, i % 2 ? "#4f545c" : "#6c717a");
+  px(g, x + 6, y + 9, 20, 14, "#1f6b3a"); px(g, x + 10, y + 15, 9, 2, "#e8f5e0"); px(g, x + 17, y + 12, 2, 8, "#e8f5e0");
+  px(g, x + 19, y + 14, 2, 4, "#e8f5e0");
+}
+function crateTile(g, x, y, tx, ty) {
+  floorTile(g, x, y, tx, ty);
+  px(g, x + 6, y + 26, 22, 4, "rgba(0,0,0,.35)");
+  px(g, x + 4, y + 6, 24, 22, "#8b6a3e"); px(g, x + 4, y + 6, 24, 3, "#a5804d");
+  for (let i = 0; i < 20; i++) { px(g, x + 5 + i, y + 8 + i, 2, 1, "#6b5030"); px(g, x + 26 - i, y + 8 + i, 2, 1, "#6b5030"); }
+}
+function stain(g, x, y) {
+  g.fillStyle = "rgba(122,20,20,.75)"; g.fillRect(x + 8, y + 12, 12, 6); g.fillRect(x + 12, y + 9, 6, 12); g.fillRect(x + 21, y + 20, 3, 3);
+}
+function drawTile(g, ch, x, y, tx, ty) {
+  if (ch === "#") wallTile(g, x, y);
+  else if (ch === "B") boardTile(g, x, y);
+  else if (ch === ",") woodTile(g, x, y, tx, ty);
+  else if (ch === "D") doorTile(g, x, y, tx, ty);
+  else if (ch === "d") deskTile(g, x, y, tx, ty);
+  else if (ch === "L") lockerTile(g, x, y);
+  else if (ch === "S") stairsTile(g, x, y);
+  else if (ch === "c") crateTile(g, x, y, tx, ty);
+  else floorTile(g, x, y, tx, ty);
+}
+
+// ---------- character painter: 16x24 logical grid, 2px blocks -> 32x48 ----------
+const PAL = {
+  waen: { hair: "#2a211c", skin: "#f1c9a5", shirt: "#eef0f2", bottom: "#2b3552", shoe: "#3a2a22", eye: "#1a1a1a", glasses: true },
+  zombie: { hair: "#2b2a24", skin: "#8fae86", shirt: "#b6bda9", bottom: "#353a4c", shoe: "#2a2420", eye: "#e2483a", torn: true },
+};
+function drawChar(g, ox, oy, dir, frame, p, s = 2) {
+  const b = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(ox + x * s, oy + y * s, w * s, h * s); };
+  const bob = frame % 2 ? -1 : 0;
+  // shadow
+  g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(ox + 4 * s, oy + 22 * s, 8 * s, 2 * s);
+  // legs
+  const legL = frame === 1 ? 1 : frame === 3 ? -1 : 0, legR = -legL;
+  b(5, 19 + Math.max(0, -legL), 2, 3 + legL - Math.max(0, -legL), p.skin);
+  b(9, 19 + Math.max(0, -legR), 2, 3 + legR - Math.max(0, -legR), p.skin);
+  b(5, 21 + legL, 2, 1, p.shoe); b(9, 21 + legR, 2, 1, p.shoe);
+  // shorts + shirt
+  b(4, 17 + bob, 8, 3, p.bottom);
+  b(4, 12 + bob, 8, 5, p.shirt);
+  if (p.torn) { b(5, 15 + bob, 2, 1, p.skin); b(9, 13 + bob, 1, 2, "#6b3b3b"); }
+  // arms
+  const sw = frame === 1 ? 1 : frame === 3 ? -1 : 0;
+  if (dir === 0 || dir === 3) { b(3, 12 + bob + Math.max(0, sw), 1, 4, p.skin); b(12, 12 + bob + Math.max(0, -sw), 1, 4, p.skin); }
+  else if (dir === 1) b(7 + sw, 13 + bob, 2, 4, p.skin);
+  else b(7 - sw, 13 + bob, 2, 4, p.skin);
+  // head
+  const hy = 2 + bob;
+  b(3, hy, 10, 10, p.hair);
+  if (dir === 0) { b(4, hy + 4, 8, 6, p.skin); b(4, hy + 3, 3, 1, p.skin); b(10, hy + 3, 2, 1, p.skin); b(5, hy + 6, 1, 2, p.eye); b(10, hy + 6, 1, 2, p.eye); if (p.glasses) { b(4, hy + 5, 3, 1, "#3d3a36"); b(9, hy + 5, 3, 1, "#3d3a36"); } b(7, hy + 9, 2, 1, "#c98f78"); }
+  else if (dir === 1) { b(3, hy + 4, 6, 6, p.skin); b(4, hy + 6, 1, 2, p.eye); if (p.glasses) b(3, hy + 5, 3, 1, "#3d3a36"); b(3, hy + 9, 2, 1, "#c98f78"); }
+  else if (dir === 2) { b(7, hy + 4, 6, 6, p.skin); b(11, hy + 6, 1, 2, p.eye); if (p.glasses) b(10, hy + 5, 3, 1, "#3d3a36"); b(11, hy + 9, 2, 1, "#c98f78"); }
+  else { b(3, hy + 9, 10, 1, p.hair); }
+  b(3, hy, 10, 1, p.hair); b(4, hy - 1, 8, 1, p.hair);
+}
+
+// ---------- items ----------
+function drawItem(g, kind, x, y, t) {
+  const by = Math.round(Math.sin(t / 300) * 2);
+  g.fillStyle = "rgba(0,0,0,.3)"; g.fillRect(x + 9, y + 25, 14, 3);
+  const r = (a, b, w, h, c) => { g.fillStyle = c; g.fillRect(x + a, y + b + by, w, h); };
+  if (kind === "water") { r(12, 6, 8, 3, "#cfe8f2"); r(11, 9, 10, 15, "#6fb3c8"); r(13, 12, 2, 9, "#bfe2ee"); }
+  else if (kind === "snack") { r(8, 9, 16, 14, "#e08a2e"); r(8, 9, 16, 3, "#f3b35c"); r(12, 14, 8, 4, "#fff1d6"); }
+  else if (kind === "med") { r(7, 9, 18, 14, "#eeeae0"); r(14, 11, 4, 10, "#e2483a"); r(11, 14, 10, 4, "#e2483a"); }
+  else if (kind === "key") { r(9, 12, 7, 7, "#e7c35a"); r(11, 14, 3, 3, "#121411"); r(16, 14, 9, 3, "#e7c35a"); r(21, 17, 2, 3, "#e7c35a"); }
+}
+function drawMarker(g, x, y, t) {
+  const by = Math.round(Math.sin(t / 220) * 3);
+  g.fillStyle = "rgba(240,164,58,.22)"; g.fillRect(x + 4, y + 24, 24, 5);
+  g.save(); g.translate(x + 16, y + 10 + by); g.rotate(Math.PI / 4);
+  g.fillStyle = "#f0a43a"; g.fillRect(-8, -8, 16, 16); g.strokeStyle = "#121411"; g.lineWidth = 2; g.strokeRect(-8, -8, 16, 16); g.restore();
+  g.fillStyle = "#121411"; g.fillRect(x + 15, y + 4 + by, 3, 7); g.fillRect(x + 15, y + 13 + by, 3, 3);
+}
+
+// ---------- events ----------
+const EVENTS_DEF = [
+  { id: "E1", x: 3, y: 7, title: "เสียงเคาะจากห้อง 601", text: "มีเสียงเคาะประตูเบา ๆ จากในห้อง ไม่รู้ว่าเป็นเพื่อนหรือซอมบี้", opts: [["ค่อย ๆ เปิดประตูดูเอง", "คุณเปิดประตูอย่างระวัง ข้างในว่างเปล่า แต่เจอกุญแจห้องเก็บของ"], ["ตะโกนถามก่อนว่าใคร", "มีเสียงตอบกลับเบา ๆ ว่า \"ช่วยด้วย\" แล้วก็เงียบไป"], ["ล็อกประตูไว้แล้วเดินต่อ", "คุณดันโต๊ะมากันประตูไว้ ปลอดภัยขึ้น แต่ไม่รู้ว่าข้างในคือใคร"]] },
+  { id: "E2", x: 12, y: 3, title: "เพื่อนบาดเจ็บในห้อง 602", text: "บอมนั่งพิงโต๊ะ ขาเป็นแผล เขาขอให้รอก่อน แต่ได้ยินเสียงซอมบี้ใกล้เข้ามา", opts: [["ทำแผลให้ก่อน แม้จะเสียเวลา", "แผลหยุดเลือดแล้ว บอมขอบคุณและขอเดินไปด้วย"], ["พยุงบอมแล้วรีบไปพร้อมกัน", "คุณสองคนเดินช้าลง แต่ไปด้วยกันได้"], ["บอกให้บอมซ่อน แล้วไปหาทางออกก่อน", "คุณสัญญาว่าจะกลับมาพร้อมความช่วยเหลือ"]] },
+  { id: "E3", x: 21, y: 8, title: "หน้าบันไดหนีไฟ", text: "ประตูบันไดเปิดแง้มอยู่ ข้างล่างมืดสนิท มีเสียงฝีเท้าหลายคู่", opts: [["ลงไปเลย ไม่รอแล้ว", "คุณรีบลงบันไดอย่างเงียบที่สุด"], ["รอฟังเสียงอีกครู่ก่อนตัดสินใจ", "เสียงฝีเท้าเงียบลง คุณได้จังหวะลงไป"], ["กลับไปหาทางอื่นก่อน", "คุณถอยกลับมาตั้งหลักที่ทางเดิน"]] },
+];
+const ITEMS_DEF = [{ k: "water", x: 20, y: 3, n: "น้ำดื่ม", eff: { water: 35 } }, { k: "snack", x: 4, y: 12, n: "ขนมปัง", eff: { food: 30 } }, { k: "med", x: 13, y: 5, n: "ชุดปฐมพยาบาล", eff: { hp: 35 } }, { k: "key", x: 2, y: 3, n: "กุญแจห้องเก็บของ", eff: {} }];
+
+// ---------- state ----------
+let S;
+function reset() {
+  S = {
+    p: { x: 2, y: 8, fx: 2, fy: 8, dir: 2, frame: 0, moving: false, t0: 0, from: null },
+    z: { x: 16, y: 8, fx: 16, fy: 8, dir: 1, frame: 0, t: 0, from: null, t0: 0 },
+    hp: 100, food: 80, water: 70,
+    events: EVENTS_DEF.map((e) => ({ ...e, done: false })),
+    items: ITEMS_DEF.map((i) => ({ ...i, got: false })),
+    visited: new Set(["2,8"]), steps: 0, hesit: [], got: 0, hits: 0, paused: false, over: false, started: performance.now(),
+  };
+  hideModal(); renderHud(); renderLog();
+}
+const walkable = (() => { let n = 0; for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (!solid(x, y)) n++; return n; })();
+
+// ---------- canvas ----------
+const cv = document.getElementById("cv"), g = cv.getContext("2d");
+g.imageSmoothingEnabled = false;
+const bg = document.createElement("canvas"); bg.width = cv.width; bg.height = cv.height;
+const bgc = bg.getContext("2d");
+for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) { drawTile(bgc, tileAt(x, y), x * T, y * T, x, y); if (STAINS.has(x + "," + y)) stain(bgc, x * T, y * T); }
+
+const tgGrid = document.getElementById("tg-grid"), tgLayer = document.getElementById("tg-layer");
+tgLayer.addEventListener("change", () => { document.getElementById("legend").hidden = !tgLayer.checked; });
+
+function lerpPos(o, now, dur) {
+  if (!o.from) return [o.x, o.y];
+  const k = Math.min(1, (now - o.t0) / dur);
+  return [o.from[0] + (o.x - o.from[0]) * k, o.from[1] + (o.y - o.from[1]) * k];
+}
+function label(text, x, y, c) {
+  g.font = "bold 11px JetBrains Mono, monospace"; const w = g.measureText(text).width + 6;
+  g.fillStyle = c; g.fillRect(x, y, w, 14); g.fillStyle = "#121411"; g.fillText(text, x + 3, y + 11);
+}
+function draw(now) {
+  g.drawImage(bg, 0, 0);
+  if (tgLayer.checked) {
+    g.fillStyle = "rgba(226,72,58,.45)";
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (solid(x, y)) g.fillRect(x * T, y * T, T, T);
+  }
+  const ents = [];
+  S.items.forEach((it) => { if (!it.got) ents.push({ y: it.y, d: () => drawItem(g, it.k, it.x * T, it.y * T, now) }); });
+  S.events.forEach((e) => { if (!e.done) ents.push({ y: e.y, d: () => drawMarker(g, e.x * T, e.y * T, now) }); });
+  const [px_, py_] = lerpPos(S.p, now, 140), [zx, zy] = lerpPos(S.z, now, 420);
+  ents.push({ y: py_ + 0.01, d: () => drawChar(g, Math.round(px_ * T), Math.round(py_ * T - 16), S.p.dir, S.p.frame, PAL.waen) });
+  ents.push({ y: zy, d: () => drawChar(g, Math.round(zx * T), Math.round(zy * T - 16), S.z.dir, S.z.frame, PAL.zombie) });
+  ents.sort((a, b) => a.y - b.y).forEach((e) => e.d());
+  if (S.hitFlash && now - S.hitFlash < 250) { g.fillStyle = "rgba(226,72,58,.28)"; g.fillRect(0, 0, cv.width, cv.height); }
+  if (tgGrid.checked) {
+    g.strokeStyle = "rgba(236,230,214,.18)"; g.lineWidth = 1; g.beginPath();
+    for (let x = 0; x <= COLS; x++) { g.moveTo(x * T + .5, 0); g.lineTo(x * T + .5, cv.height); }
+    for (let y = 0; y <= ROWS; y++) { g.moveTo(0, y * T + .5); g.lineTo(cv.width, y * T + .5); }
+    g.stroke();
+  }
+  if (tgLayer.checked) {
+    S.events.forEach((e) => label(e.id, e.x * T + 2, e.y * T + 2, C.amber));
+    S.items.forEach((i) => label("I", i.x * T + 2, i.y * T + 2, C.blue));
+    label("Z", 16 * T + 2, 8 * T + 2, C.green); label("P", 2 * T + 2, 8 * T + 2, C.green); label("EXIT", 23 * T - 14, 8 * T + 2, C.green);
+  }
+  if (S.over) {
+    g.fillStyle = "rgba(10,11,10,.78)"; g.fillRect(0, 0, cv.width, cv.height);
+    g.textAlign = "center"; g.fillStyle = S.over === "win" ? C.green : C.red; g.font = "700 44px Chakra Petch, sans-serif";
+    g.fillText(S.over === "win" ? "SURVIVED" : "YOU DIED", cv.width / 2, cv.height / 2 - 6);
+    g.fillStyle = C.bone; g.font = "500 18px IBM Plex Sans Thai, sans-serif";
+    g.fillText(S.over === "win" ? "หนีลงบันไดได้สำเร็จ · ในเกมจริงจะไปต่อชั้นถัดไป" : "พลังหมด · กด \"เริ่มใหม่\" เพื่อลองอีกครั้ง", cv.width / 2, cv.height / 2 + 28);
+    g.textAlign = "left";
+  }
+}
+
+// ---------- movement ----------
+const DIRS = { "0,1": 0, "-1,0": 1, "1,0": 2, "0,-1": 3 };
+function tryMove(dx, dy) {
+  if (S.paused || S.over || S.p.moving) return;
+  const now = performance.now(); S.p.dir = DIRS[dx + "," + dy];
+  const nx = S.p.x + dx, ny = S.p.y + dy;
+  if (solid(nx, ny)) { S.p.frame = 0; return; }
+  if (nx === S.z.x && ny === S.z.y) { bump(); return; }
+  S.p.from = [S.p.x, S.p.y]; S.p.x = nx; S.p.y = ny; S.p.t0 = now; S.p.moving = true;
+  S.p.stepN = (S.p.stepN || 0) + 1; S.p.frame = S.p.stepN % 2 ? 1 : 3;
+  S.steps++; S.visited.add(nx + "," + ny);
+  S.food = Math.max(0, S.food - 0.5); S.water = Math.max(0, S.water - 0.8);
+  if (S.food === 0 || S.water === 0) S.hp = Math.max(0, S.hp - 1.5);
+  setTimeout(() => { S.p.moving = false; S.p.frame = 0; S.p.from = null; arrive(); }, 140);
+}
+function arrive() {
+  const { x, y } = S.p;
+  const it = S.items.find((i) => !i.got && i.x === x && i.y === y);
+  if (it) {
+    it.got = true; S.got++;
+    if (it.eff.water) S.water = Math.min(100, S.water + it.eff.water);
+    if (it.eff.food) S.food = Math.min(100, S.food + it.eff.food);
+    if (it.eff.hp) S.hp = Math.min(100, S.hp + it.eff.hp);
+    toast("เก็บ " + it.n);
+  }
+  const ev = S.events.find((e) => !e.done && e.x === x && e.y === y);
+  if (ev) openEvent(ev);
+  if (tileAt(x, y) === "S" && !S.over) S.over = "win";
+  if (S.hp <= 0) S.over = "dead";
+  renderHud(); renderLog();
+}
+function bump() {
+  S.hp = Math.max(0, S.hp - 20); S.hits++; S.hitFlash = performance.now(); toast("โดนซอมบี้กัด!", true);
+  // push player back one tile if possible
+  const back = [[0, 1], [0, -1], [1, 0], [-1, 0]].find(([dx, dy]) => !solid(S.p.x + dx, S.p.y + dy) && !(S.p.x + dx === S.z.x && S.p.y + dy === S.z.y) && (S.p.x + dx - S.z.x) ** 2 + (S.p.y + dy - S.z.y) ** 2 > 1);
+  if (back) { S.p.from = null; S.p.x += back[0]; S.p.y += back[1]; S.p.fx = S.p.x; S.p.fy = S.p.y; }
+  if (S.hp <= 0) S.over = "dead";
+  renderHud(); renderLog();
+}
+function zombieStep(now) {
+  if (S.paused || S.over || now - S.z.t < 450) return;
+  S.z.t = now;
+  const dx = S.p.x - S.z.x, dy = S.p.y - S.z.y, dist = Math.abs(dx) + Math.abs(dy);
+  let cand;
+  if (dist <= 6) {
+    cand = Math.abs(dx) > Math.abs(dy) ? [[Math.sign(dx), 0], [0, Math.sign(dy) || 1], [0, -(Math.sign(dy) || 1)]] : [[0, Math.sign(dy)], [Math.sign(dx) || 1, 0], [-(Math.sign(dx) || 1), 0]];
+  } else {
+    cand = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - .5);
+    if (Math.random() < .4) return;
+  }
+  for (const [mx, my] of cand) {
+    if (!mx && !my) continue;
+    const nx = S.z.x + mx, ny = S.z.y + my;
+    if (solid(nx, ny) || tileAt(nx, ny) === "S") continue;
+    S.z.dir = DIRS[mx + "," + my];
+    if (nx === S.p.x && ny === S.p.y) { bump(); return; }
+    S.z.from = [S.z.x, S.z.y]; S.z.x = nx; S.z.y = ny; S.z.t0 = now; S.z.frame = S.z.frame === 1 ? 3 : 1;
+    setTimeout(() => { S.z.frame = 0; }, 300);
+    return;
+  }
+}
+
+// ---------- UI ----------
+const hud = document.getElementById("hud");
+function bar(name, v, c) { return `<div class="meter"><span>${name} ${Math.round(v)}</span><div class="bar"><i style="width:${v}%;background:${c}"></i></div></div>`; }
+function renderHud() { hud.innerHTML = bar("พลังชีวิต", S.hp, C.red) + bar("อาหาร", S.food, C.amber) + bar("น้ำ", S.water, C.blue); }
+const logEl = document.getElementById("log");
+function renderLog() {
+  const avg = S.hesit.length ? (S.hesit.reduce((a, b) => a + b, 0) / S.hesit.length / 1000).toFixed(1) : "–";
+  const items = [
+    [S.steps, "ก้าวที่เดิน"],
+    [Math.round(S.visited.size / walkable * 100) + "%", "พื้นที่ที่สำรวจ"],
+    [avg + (avg === "–" ? "" : " วิ"), "เวลาเฉลี่ยก่อนตอบคำถาม"],
+    [S.got + "/" + S.items.length, "ไอเทมที่เก็บ"],
+    [S.hits, "ครั้งที่โดนซอมบี้"],
+  ];
+  logEl.innerHTML = items.map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join("");
+}
+let toastT;
+const toastEl = document.getElementById("toast");
+function toast(t, bad) { toastEl.textContent = t; toastEl.style.borderColor = bad ? C.red : C.green; toastEl.style.color = bad ? C.red : C.green; toastEl.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (toastEl.hidden = true), 1600); }
+const modal = document.getElementById("modal"), card = document.getElementById("card");
+function hideModal() { modal.hidden = true; if (S) S.paused = false; }
+function openEvent(ev) {
+  S.paused = true; const t0 = performance.now();
+  card.innerHTML = `<span class="eyebrow">${ev.id} · เหตุการณ์</span><h3>${ev.title}</h3><p class="dim" style="font-size:15px">${ev.text}</p><div class="opts">${ev.opts.map((o, i) => `<button type="button" data-i="${i}">${"ABC"[i]}. ${o[0]}</button>`).join("")}</div>`;
+  modal.hidden = false;
+  card.querySelector("button").focus();
+  card.querySelectorAll("button[data-i]").forEach((b) => b.addEventListener("click", () => {
+    S.hesit.push(performance.now() - t0); ev.done = true;
+    card.innerHTML = `<span class="eyebrow">${ev.id} · ผลที่ตามมา</span><p style="font-size:15px">${ev.opts[+b.dataset.i][1]}</p><button type="button" id="cont">เดินต่อ</button>`;
+    const c = card.querySelector("#cont"); c.focus(); c.addEventListener("click", () => { hideModal(); renderLog(); });
+  }));
+}
+
+// keyboard
+const KEYS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0] };
+const held = new Set();
+const game = document.getElementById("game");
+let gameFocus = false;
+game.addEventListener("pointerdown", () => { gameFocus = true; });
+document.addEventListener("pointerdown", (e) => { if (!game.contains(e.target) && !e.target.closest(".pad")) gameFocus = false; });
+window.addEventListener("keydown", (e) => {
+  if (!KEYS[e.key] || e.target.closest("input,button,a")) return;
+  const r = game.getBoundingClientRect();
+  if (!gameFocus && (r.bottom < 0 || r.top > innerHeight)) return;
+  e.preventDefault(); held.add(e.key);
+});
+window.addEventListener("keyup", (e) => held.delete(e.key));
+// pad
+let padDir = null;
+document.querySelectorAll(".pad button").forEach((b) => {
+  const d = b.dataset.d.split(",").map(Number);
+  b.addEventListener("pointerdown", (e) => { e.preventDefault(); padDir = d; b.setPointerCapture?.(e.pointerId); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => b.addEventListener(ev, () => { padDir = null; }));
+});
+document.getElementById("restart").addEventListener("click", reset);
+
+function loop(now) {
+  if (!S.p.moving && !S.paused && !S.over) {
+    const k = [...held].pop();
+    const d = padDir || (k && KEYS[k]);
+    if (d) tryMove(d[0], d[1]);
+  }
+  zombieStep(now);
+  draw(now);
+  requestAnimationFrame(loop);
+}
+reset();
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
